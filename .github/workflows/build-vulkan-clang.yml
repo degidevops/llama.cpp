@@ -1,4 +1,4 @@
-name: NUKLIR 100 t/s Ryzen 5600G (CPU-ONLY - MSVC + LLD)
+name: NUKLIR 100 t/s Ryzen 5600G (CPU-ONLY - MSVC FIXED)
 
 on:
   workflow_dispatch:
@@ -15,10 +15,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup MSVC (Visual Studio 2022)
-        uses: microsoft/setup-msvc-developer-command@v1
+      - name: Setup MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          toolset: '14.40'
+          arch: amd64
 
       - name: NUKLIR BUILD – MSVC + LLD (MAX SPEED)
         shell: cmd
@@ -29,12 +29,9 @@ jobs:
             -DLLAMA_BUILD_SERVER=ON ^
             -DLLAMA_CURL=OFF ^
             -DCMAKE_BUILD_TYPE=Release ^
-            -DCMAKE_C_COMPILER=cl.exe ^
-            -DCMAKE_CXX_COMPILER=cl.exe ^
-            -DCMAKE_LINKER=lld-link.exe ^
             -DCMAKE_C_FLAGS_RELEASE="/O2 /arch:AVX2 /GL /DNDEBUG" ^
             -DCMAKE_CXX_FLAGS_RELEASE="/O2 /arch:AVX2 /GL /DNDEBUG" ^
-            -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO /OPT:REF /OPT:ICF /LTCG:incremental"
+            -DCMAKE_EXE_LINKER_FLAGS="/LTCG:incremental /OPT:REF /OPT:ICF"
 
           cmake --build build --config Release -j 16
 
