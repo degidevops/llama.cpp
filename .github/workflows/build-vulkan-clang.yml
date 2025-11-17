@@ -1,4 +1,4 @@
-name: NUKLIR 100 t/s Ryzen 5600G (FINAL FIX - ABSOLUTE PATH)
+name: NUKLIR 100 t/s Ryzen 5600G (FINAL FIX - build\\bin\\)
 
 on:
   workflow_dispatch:
@@ -35,29 +35,26 @@ jobs:
 
           cmake --build build --config Release -j 16
 
-          REM --- MASUK KE FOLDER BUILD ---
-          pushd build\bin\Release
+          REM --- CEK OUTPUT FOLDER (NINJA PAKAI build\bin\) ---
+          dir build\bin\llama-server.exe || echo "TIDAK ADA DI build\bin\!"
 
-          REM --- CEK FILE DENGAN DIR (PASTIKAN ADA) ---
+          REM --- MASUK KE FOLDER build\bin\ ---
+          pushd build\bin
+
+          REM --- CEK FILE ---
           dir llama-server.exe
           if errorlevel 1 (
-            echo "ERROR: llama-server.exe TIDAK DITEMUKAN DI $(pwd)!"
+            echo "ERROR: llama-server.exe TIDAK DITEMUKAN!"
             popd
             exit /b 1
           )
 
-          REM --- COPY DENGAN NAMA BARU ---
+          REM --- COPY ---
           copy /Y llama-server.exe llama-NUKLIR-100tps.exe
-          if errorlevel 1 (
-            echo "COPY GAGAL!"
-            popd
-            exit /b 1
-          )
 
           REM --- CEK HASIL ---
           dir llama-NUKLIR-100tps.exe
 
-          REM --- KEMBALI KE ROOT ---
           popd
 
           REM --- DOWNLOAD UPX 64-BIT ---
@@ -65,11 +62,11 @@ jobs:
           tar -xf upx.zip
           move upx-4.2.4-win64\upx.exe .
 
-          REM --- KOMPRES DARI PATH YANG BENAR ---
-          .\upx.exe --best --lzma "build\bin\Release\llama-NUKLIR-100tps.exe"
+          REM --- KOMPRES ---
+          .\upx.exe --best --lzma "build\bin\llama-NUKLIR-100tps.exe"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: llama-NUKLIR-100tps-5600G
-          path: build/bin/Release/llama-NUKLIR-100tps.exe
+          path: build/bin/llama-NUKLIR-100tps.exe
