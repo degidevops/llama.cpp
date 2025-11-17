@@ -1,4 +1,4 @@
-name: NUKLIR 100 t/s Ryzen 5600G (CPU-ONLY - MSVC FIXED)
+name: NUKLIR 100 t/s Ryzen 5600G (CPU-ONLY - MSVC + UPX 64-BIT)
 
 on:
   workflow_dispatch:
@@ -35,10 +35,17 @@ jobs:
 
           cmake --build build --config Release -j 16
 
-          copy build\bin\Release\llama-server.exe build\bin\Release\llama-NUKLIR-100tps.exe
+          REM --- COPY DENGAN PATH PASTI ---
+          if not exist "build\bin\Release\" mkdir "build\bin\Release\"
+          copy /Y "build\bin\Release\llama-server.exe" "build\bin\Release\llama-NUKLIR-100tps.exe"
 
-          curl -L -o upx.exe https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.exe
-          .\upx.exe --best --lzma build\bin\Release\llama-NUKLIR-100tps.exe
+          REM --- DOWNLOAD UPX 64-BIT LANGSUNG DARI GITHUB ---
+          curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.zip
+          tar -xf upx.zip
+          move upx-4.2.4-win64\upx.exe .
+
+          REM --- KOMPRES PAKAI UPX 64-BIT ---
+          .\upx.exe --best --lzma "build\bin\Release\llama-NUKLIR-100tps.exe"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
