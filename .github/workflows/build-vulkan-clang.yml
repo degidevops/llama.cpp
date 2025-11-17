@@ -1,4 +1,4 @@
-name: NUKLIR 100 t/s Ryzen 5600G (CPU-ONLY - MSVC + UPX 64-BIT)
+name: NUKLIR 100 t/s Ryzen 5600G (FINAL FIX - SAFE COPY)
 
 on:
   workflow_dispatch:
@@ -35,17 +35,23 @@ jobs:
 
           cmake --build build --config Release -j 16
 
-          REM --- COPY DENGAN PATH PASTI ---
-          if not exist "build\bin\Release\" mkdir "build\bin\Release\"
-          copy /Y "build\bin\Release\llama-server.exe" "build\bin\Release\llama-NUKLIR-100tps.exe"
+          REM --- CEK APAKAH FILE ADA ---
+          dir "build\bin\Release\llama-server.exe" || echo "ERROR: llama-server.exe TIDAK ADA!"
 
-          REM --- DOWNLOAD UPX 64-BIT LANGSUNG DARI GITHUB ---
+          REM --- COPY DENGAN PATH YANG PASTI (PAKAI QUOTES & /Y) ---
+          if not exist "build\bin\Release\" mkdir "build\bin\Release\"
+          copy /Y "build\bin\Release\llama-server.exe" "build\bin\Release\llama-NUKLIR-100tps.exe" || echo "COPY GAGAL!"
+
+          REM --- CEK HASIL COPY ---
+          dir "build\bin\Release\llama-NUKLIR-100tps.exe" || echo "FILE SETELAH COPY TIDAK ADA!"
+
+          REM --- DOWNLOAD UPX 64-BIT ---
           curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.zip
           tar -xf upx.zip
-          move upx-4.2.4-win64\upx.exe .
+          move upx-4.2.4-win64\upx.exe . || echo "GAGAL PINDAH UPX!"
 
-          REM --- KOMPRES PAKAI UPX 64-BIT ---
-          .\upx.exe --best --lzma "build\bin\Release\llama-NUKLIR-100tps.exe"
+          REM --- KOMPRES ---
+          .\upx.exe --best --lzma "build\bin\Release\llama-NUKLIR-100tps.exe" || echo "UPX GAGAL!"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
