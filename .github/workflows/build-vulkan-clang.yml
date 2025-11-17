@@ -1,4 +1,4 @@
-name: NUKLIR 68 t/s Ryzen 5600G (FINAL – REGEX + PowerShell)
+name: NUKLIR 68 t/s Ryzen 5600G (FINAL – TYPO FIXED)
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
           C:\vcpkg\bootstrap-vcpkg.bat
           C:\vcpkg\vcpkg.exe install curl:x64-windows-static
 
-      - name: DETECT PATHS – REGEX + PowerShell (SUPER CEPET)
+      - name: DETECT PATHS – REGEX + PowerShell (FIXED TYPO)
         id: paths
         shell: powershell
         run: |
@@ -40,7 +40,6 @@ jobs:
           $msvcLib = ($msvcPath.FullName + "\lib\x64")
           $msvcLib = $msvcLib -replace 'C:\\Program Files', 'C:\PROGRA~1'
           $msvcLib = $msvcLib -replace 'Microsoft Visual Studio', 'MICROS~2'
-          $msvcLib = $msvcLib -replace '\\', '\'
 
           # === SDK UM & UCRT (latest 10.0.xxxx.0 via regex) ===
           $sdkRoot = "C:\Program Files (x86)\Windows Kits\10\Lib"
@@ -59,16 +58,16 @@ jobs:
           $um   = "$sdkRootShort\$ver\um\x64"
           $ucrt = "$sdkRootShort\$ver\ucrt\x64"
 
-          # Output
+          # === OUTPUT PAKAI ::set-output (LAMA TAPI AMAN!) ===
           Write-Host "MSVC_LIB: $msvcLib"
           Write-Host "WINSDK_UM: $um"
           Write-Host "WINSDK_UCRT: $ucrt"
           Write-Host "SDK_VER: $ver"
 
-          "MSVC_LIB=$msvcLib" >> $env:GITHUBaitHUB_OUTPUT
-          "WINSDK_UM=$um" >> $env:GITHUB_OUTPUT
-          "WINSDK_UCRT=$ucrt" >> $env:GITHUB_OUTPUT
-          "SDK_VER=$ver" >> $env:GITHUB_OUTPUT
+          echo "MSVC_LIB=$msvcLib" >> $env:GITHUB_OUTPUT
+          echo "WINSDK_UM=$um" >> $env:GITHUB_OUTPUT
+          echo "WINSDK_UCRT=$ucrt" >> $env:GITHUB_OUTPUT
+          echo "SDK_VER=$ver" >> $env:GITHUB_OUTPUT
 
       - name: NUKLIR BUILD – Clang + LTO + Vulkan + DOUBLE %%
         shell: cmd
@@ -93,8 +92,8 @@ jobs:
             -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON ^
             -DCMAKE_C_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fno-finite-math-only -DNDEBUG" ^
             -DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fno-finite-math-only -DNDEBUG" ^
-            -DCMAKE_EXE_LINKER_FLAGS=/LIBPATH:%%MSVC_LIB%% /LIBPATH:%%WINSDK_UM%% /LIBPATH:%%WINSDK_UCRT%% libcmt.lib ucrt.lib vcruntime.lib kernel32.lib ^
-            -DCMAKE_SHARED_LINKER_FLAGS=/LIBPATH:%%MSVC_LIB%% /LIBPATH:%%WINSDK_UM%% /LIBPATH:%%WINSDK_UCRT%% libcmt.lib ucrt.lib vcruntime.lib kernel32.lib
+            -DCMAKE_EXE_LINKER_FLAGS=/LIBPATH:%%MSVC_LIB%% /LIBPATH:%%WINSDK_UM%% /LIBPATH:%%WINSDK_UCRT%% libcmt.lib ucrt.lib vcruntime.lib ^
+            -DCMAKE_SHARED_LINKER_FLAGS=/LIBPATH:%%MSVC_LIB%% /LIBPATH:%%WINSDK_UM%% /LIBPATH:%%WINSDK_UCRT%% libcmt.lib ucrt.lib vcruntime.lib
 
           cmake --build build --config Release -j 16
 
