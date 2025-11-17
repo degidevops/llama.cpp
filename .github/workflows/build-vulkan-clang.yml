@@ -1,4 +1,4 @@
-name: NUKLIR 100 t/s Ryzen 5600G (CPU-ONLY)
+name: NUKLIR 100 t/s Ryzen 5600G (CPU-ONLY - MSVC + LLD)
 
 on:
   workflow_dispatch:
@@ -15,12 +15,12 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install LLVM + Clang 19.1.7
-        uses: KyleMayes/install-llvm-action@v2
+      - name: Setup MSVC (Visual Studio 2022)
+        uses: microsoft/setup-msvc-developer-command@v1
         with:
-          version: "19.1.7"
+          toolset: '14.40'
 
-      - name: NUKLIR BUILD – CPU ONLY (MAX SPEED)
+      - name: NUKLIR BUILD – MSVC + LLD (MAX SPEED)
         shell: cmd
         run: |
           cmake -B build ^
@@ -28,19 +28,20 @@ jobs:
             -DGGML_NATIVE=ON ^
             -DLLAMA_BUILD_SERVER=ON ^
             -DLLAMA_CURL=OFF ^
-            -DCMAKE_C_COMPILER=clang ^
-            -DCMAKE_CXX_COMPILER=clang++ ^
             -DCMAKE_BUILD_TYPE=Release ^
-            -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON ^
-            -DCMAKE_C_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fno-finite-math-only -DNDEBUG" ^
-            -DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fno-finite-math-only -DNDEBUG"
+            -DCMAKE_C_COMPILER=cl.exe ^
+            -DCMAKE_CXX_COMPILER=cl.exe ^
+            -DCMAKE_LINKER=lld-link.exe ^
+            -DCMAKE_C_FLAGS_RELEASE="/O2 /arch:AVX2 /GL /DNDEBUG" ^
+            -DCMAKE_CXX_FLAGS_RELEASE="/O2 /arch:AVX2 /GL /DNDEBUG" ^
+            -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO /OPT:REF /OPT:ICF /LTCG:incremental"
 
           cmake --build build --config Release -j 16
 
-          clang++ -s -Wl,--strip-all build/bin/Release/llama-server.exe -o build/bin/Release/llama-NUKLIR-100tps.exe
+          copy build\bin\Release\llama-server.exe build\bin\Release\llama-NUKLIR-100tps.exe
 
           curl -L -o upx.exe https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.exe
-          .\upx.exe --ultra-brute --lzma build/bin/Release/llama-NUKLIR-100tps.exe
+          .\upx.exe --best --lzma build\bin\Release\llama-NUKLIR-100tps.exe
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
