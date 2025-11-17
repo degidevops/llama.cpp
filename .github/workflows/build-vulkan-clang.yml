@@ -1,4 +1,4 @@
-name: NUKLIR 68 t/s Ryzen 5600G (FIX SPASI)
+name: NUKLIR 68 t/s Ryzen 5600G (SHORT PATH)
 
 on:
   workflow_dispatch:
@@ -27,28 +27,27 @@ jobs:
           C:\vcpkg\bootstrap-vcpkg.bat
           C:\vcpkg\vcpkg.exe install curl:x64-windows-static
 
-      - name: AUTO DETECT MSVC & SDK PATHS
+      - name: AUTO DETECT MSVC & SDK PATHS (SHORT PATH)
         id: paths
-        shell: pwsh
+        shell: cmd
         run: |
-          $vsRoot = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC"
-          $msvcDirs = Get-ChildItem -Path $vsRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1
-          $MSVC_LIB = Join-Path $msvcDirs.FullName "lib\x64"
-          
-          $sdkRoot = "C:\Program Files (x86)\Windows Kits\10\Lib"
-          $sdkDirs = Get-ChildItem -Path $sdkRoot -Directory | Where-Object { $_.Name -match "^10\.0\." } | Sort-Object Name -Descending | Select-Object -First 1
-          $WINSDK_UM = Join-Path $sdkDirs.FullName "um\x64"
-          $WINSDK_UCRT = Join-Path $sdkDirs.FullName "ucrt\x64"
-          
-          echo "MSVC_LIB=$MSVC_LIB" >> $env:GITHUB_OUTPUT
-          echo "WINSDK_UM=$WINSDK_UM" >> $env:GITHUB_OUTPUT
-          echo "WINSDK_UCRT=$WINSDK_UCRT" >> $env:GITHUB_OUTPUT
-          
-          Write-Host "Detected MSVC_LIB: $MSVC_LIB"
-          Write-Host "Detected WINSDK_UM: $WINSDK_UM"
-          Write-Host "Detected WINSDK_UCRT: $WINSDK_UCRT"
+          for %%I in ("C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC") do set "MSVC_ROOT=%%~fsI"
+          for %%I in ("%MSVC_ROOT%") do set "MSVC_LIB=%%~fsI\lib\x64"
 
-      - name: NUKLIR BUILD – Clang + ESCAPED PATHS
+          for %%I in ("C:\Program Files (x86)\Windows Kits\10\Lib") do set "SDK_ROOT=%%~fsI"
+          for /f "delims=" %%D in ('dir "%SDK_ROOT%" /b /ad-h-s /o-n ^| findstr "^10\.0\." ^| head -1') do set "SDK_VER=%%D"
+          set "WINSDK_UM=%SDK_ROOT%\%SDK_VER%\um\x64"
+          set "WINSDK_UCRT=%SDK_ROOT%\%SDK_VER%\ucrt\x64"
+
+          echo MSVC_LIB=%MSVC_LIB%>> %GITHUB_OUTPUT%
+          echo WINSDK_UM=%WINSDK_UM%>> %GITHUB_OUTPUT%
+          echo WINSDK_UCRT=%WINSDK_UCRT%>> %GITHUB_OUTPUT%
+
+          echo Detected MSVC_LIB: %MSVC_LIB%
+          echo Detected WINSDK_UM: %WINSDK_UM%
+          echo Detected WINSDK_UCRT: %WINSDK_UCRT%
+
+      - name: NUKLIR BUILD – Clang + SHORT PATH
         shell: cmd
         env:
           MSVC_LIB: ${{ steps.paths.outputs.MSVC_LIB }}
@@ -71,8 +70,8 @@ jobs:
             -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON ^
             -DCMAKE_C_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fno-finite-math-only -DNDEBUG" ^
             -DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fno-finite-math-only -DNDEBUG" ^
-            -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:\"%MSVC_LIB: =^ %\" /LIBPATH:\"%WINSDK_UM: =^ %\" /LIBPATH:\"%WINSDK_UCRT: =^ %\" libcmt.lib ucrt.lib vcruntime.lib kernel32.lib user32.lib" ^
-            -DCMAKE_SHARED_LINKER_FLAGS="/LIBPATH:\"%MSVC_LIB: =^ %\" /LIBPATH:\"%WINSDK_UM: =^ %\" /LIBPATH:\"%WINSDK_UCRT: =^ %\" libcmt.lib ucrt.lib vcruntime.lib kernel32.lib user32.lib"
+            -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:\"%MSVC_LIB%\" /LIBPATH:\"%WINSDK_UM%\" /LIBPATH:\"%WINSDK_UCRT%\" libcmt.lib ucrt.lib vcruntime.lib kernel32.lib user32.lib" ^
+            -DCMAKE_SHARED_LINKER_FLAGS="/LIBPATH:\"%MSVC_LIB%\" /LIBPATH:\"%WINSDK_UM%\" /LIBPATH:\"%WINSDK_UCRT%\" libcmt.lib ucrt.lib vcruntime.lib kernel32.lib user32.lib"
 
           cmake --build build --config Release -j 16
 
