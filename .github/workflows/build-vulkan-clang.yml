@@ -1,4 +1,4 @@
-name: NUKLIR 68 t/s Ryzen 5600G (AUTO PATH - FIXED)
+name: NUKLIR 68 t/s Ryzen 5600G (FIX SPASI)
 
 on:
   workflow_dispatch:
@@ -48,7 +48,7 @@ jobs:
           Write-Host "Detected WINSDK_UM: $WINSDK_UM"
           Write-Host "Detected WINSDK_UCRT: $WINSDK_UCRT"
 
-      - name: NUKLIR BUILD – Clang + AUTO PATHS
+      - name: NUKLIR BUILD – Clang + ESCAPED PATHS
         shell: cmd
         env:
           MSVC_LIB: ${{ steps.paths.outputs.MSVC_LIB }}
@@ -71,8 +71,8 @@ jobs:
             -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON ^
             -DCMAKE_C_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fno-finite-math-only -DNDEBUG" ^
             -DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fno-finite-math-only -DNDEBUG" ^
-            -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:\"%MSVC_LIB%\" /LIBPATH:\"%WINSDK_UM%\" /LIBPATH:\"%WINSDK_UCRT%\" libcmt.lib ucrt.lib vcruntime.lib kernel32.lib user32.lib" ^
-            -DCMAKE_SHARED_LINKER_FLAGS="/LIBPATH:\"%MSVC_LIB%\" /LIBPATH:\"%WINSDK_UM%\" /LIBPATH:\"%WINSDK_UCRT%\" libcmt.lib ucrt.lib vcruntime.lib kernel32.lib user32.lib"
+            -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:\"%MSVC_LIB: =^ %\" /LIBPATH:\"%WINSDK_UM: =^ %\" /LIBPATH:\"%WINSDK_UCRT: =^ %\" libcmt.lib ucrt.lib vcruntime.lib kernel32.lib user32.lib" ^
+            -DCMAKE_SHARED_LINKER_FLAGS="/LIBPATH:\"%MSVC_LIB: =^ %\" /LIBPATH:\"%WINSDK_UM: =^ %\" /LIBPATH:\"%WINSDK_UCRT: =^ %\" libcmt.lib ucrt.lib vcruntime.lib kernel32.lib user32.lib"
 
           cmake --build build --config Release -j 16
 
