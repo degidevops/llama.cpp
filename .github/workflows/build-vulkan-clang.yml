@@ -1,4 +1,4 @@
-name: NUKLIR 100 t/s Ryzen 5600G (FINAL FIX - SAFE COPY)
+name: NUKLIR 100 t/s Ryzen 5600G (FINAL FIX - ABSOLUTE PATH)
 
 on:
   workflow_dispatch:
@@ -35,23 +35,38 @@ jobs:
 
           cmake --build build --config Release -j 16
 
-          REM --- CEK APAKAH FILE ADA ---
-          dir "build\bin\Release\llama-server.exe" || echo "ERROR: llama-server.exe TIDAK ADA!"
+          REM --- MASUK KE FOLDER BUILD ---
+          pushd build\bin\Release
 
-          REM --- COPY DENGAN PATH YANG PASTI (PAKAI QUOTES & /Y) ---
-          if not exist "build\bin\Release\" mkdir "build\bin\Release\"
-          copy /Y "build\bin\Release\llama-server.exe" "build\bin\Release\llama-NUKLIR-100tps.exe" || echo "COPY GAGAL!"
+          REM --- CEK FILE DENGAN DIR (PASTIKAN ADA) ---
+          dir llama-server.exe
+          if errorlevel 1 (
+            echo "ERROR: llama-server.exe TIDAK DITEMUKAN DI $(pwd)!"
+            popd
+            exit /b 1
+          )
 
-          REM --- CEK HASIL COPY ---
-          dir "build\bin\Release\llama-NUKLIR-100tps.exe" || echo "FILE SETELAH COPY TIDAK ADA!"
+          REM --- COPY DENGAN NAMA BARU ---
+          copy /Y llama-server.exe llama-NUKLIR-100tps.exe
+          if errorlevel 1 (
+            echo "COPY GAGAL!"
+            popd
+            exit /b 1
+          )
+
+          REM --- CEK HASIL ---
+          dir llama-NUKLIR-100tps.exe
+
+          REM --- KEMBALI KE ROOT ---
+          popd
 
           REM --- DOWNLOAD UPX 64-BIT ---
           curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.zip
           tar -xf upx.zip
-          move upx-4.2.4-win64\upx.exe . || echo "GAGAL PINDAH UPX!"
+          move upx-4.2.4-win64\upx.exe .
 
-          REM --- KOMPRES ---
-          .\upx.exe --best --lzma "build\bin\Release\llama-NUKLIR-100tps.exe" || echo "UPX GAGAL!"
+          REM --- KOMPRES DARI PATH YANG BENAR ---
+          .\upx.exe --best --lzma "build\bin\Release\llama-NUKLIR-100tps.exe"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
