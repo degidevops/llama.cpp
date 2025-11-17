@@ -1,4 +1,4 @@
-name: NUKLIR 68 t/s Ryzen 5600G (FIXED & WORKING - NOV 2025)
+name: NUKLIR 68 t/s Ryzen 5600G (FIXED NOV 2025 - windows-2025)
 
 on:
   workflow_dispatch:
@@ -21,7 +21,9 @@ jobs:
       - name: Install vcpkg + libcurl (static)
         shell: cmd
         run: |
-          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+          if not exist C:\vcpkg (
+            git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+          )
           C:\vcpkg\bootstrap-vcpkg.bat
           C:\vcpkg\vcpkg.exe install curl:x64-windows-static
 
@@ -31,7 +33,9 @@ jobs:
           LLVM_PATH: C:\Program Files\LLVM
         run: |
           set "VS2022_PATH=C:\Program Files\Microsoft Visual Studio\2022\Enterprise"
-          set "WINSDK_PATH=C:\Program Files (x86)\Windows Kits\10"
+          set "MSVC_LIB=%VS2022_PATH%\VC\Tools\MSVC\14.43.35116\lib\x64"
+          set "WINSDK_UM=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x64"
+          set "WINSDK_UCRT=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\ucrt\x64"
 
           cmake -B build ^
             -G Ninja ^
@@ -45,8 +49,8 @@ jobs:
             -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON ^
             -DCMAKE_C_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fno-finite-math-only -DNDEBUG" ^
             -DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fno-finite-math-only -DNDEBUG" ^
-            -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:\"%VS2022_PATH%\VC\Tools\MSVC\14.44.35207\lib\x64\" /LIBPATH:\"%WINSDK_PATH%\Lib\10.0.22621.0\um\x64\" /LIBPATH:\"%WINSDK_PATH%\Lib\10.0.22621.0\ucrt\x64\" libcmt.lib ucrt.lib vcruntime.lib kernel32.lib user32.lib" ^
-            -DCMAKE_SHARED_LINKER_FLAGS="/LIBPATH:\"%VS2022_PATH%\VC\Tools\MSVC\14.44.35207\lib\x64\" /LIBPATH:\"%WINSDK_PATH%\Lib\10.0.22621.0\um\x64\" /LIBPATH:\"%WINSDK_PATH%\Lib\10.0.22621.0\ucrt\x64\" libcmt.lib ucrt.lib vcruntime.lib kernel32.lib user32.lib"
+            -DCMAKE_EXE_LINKER_FLAGS="/LIBPATH:\"%MSVC_LIB%\" /LIBPATH:\"%WINSDK_UM%\" /LIBPATH:\"%WINSDK_UCRT%\" libcmt.lib ucrt.lib vcruntime.lib kernel32.lib user32.lib" ^
+            -DCMAKE_SHARED_LINKER_FLAGS="/LIBPATH:\"%MSVC_LIB%\" /LIBPATH:\"%WINSDK_UM%\" /LIBPATH:\"%WINSDK_UCRT%\" libcmt.lib ucrt.lib vcruntime.lib kernel32.lib user32.lib"
 
           cmake --build build --config Release -j 16
 
