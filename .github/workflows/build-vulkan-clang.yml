@@ -1,0 +1,48 @@
+name: NUKLIR BUILD – 68 t/s Ryzen 5600G (FULL MENTOK)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master, main ]
+  schedule:
+    - cron: '0 20 * * *'   # tiap hari jam 03.00 WIB otomatis rebuild
+
+jobs:
+  nuclear:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "19.1.7"
+
+      - name: NUKLIR BUILD 68 t/s (Zen3 + Vega7)
+        shell: cmd
+        run: |
+          cmake -B build ^
+            -G Ninja ^
+            -DLLAMA_VULKAN=ON -DLLAMA_NATIVE=ON -DLLAMA_LTO=ON ^
+            -DLLAMA_AVX2=ON -DLLAMA_FMA=ON -DLLAMA_F16C=ON ^
+            -DLLAMA_BUILD_SERVER=ON ^
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON ^
+            -DCMAKE_C_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fp-model=fast=2 -DNDEBUG" ^
+            -DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fp-model=fast=2 -DNDEBUG"
+
+          cmake --build build --config Release -j 16 -- -flto=thin
+
+          clang++ -s -Wl,--strip-all -Wl,--gc-sections build/bin/Release/llama-server.exe -o build/bin/Release/llama-NUKLIR.exe
+
+          curl -L -o upx.exe https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.exe
+          ./upx.exe --ultra-brute --lzma build/bin/Release/llama-NUKLIR.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-NUKLIR-68tps-5600G-Qwen3-14B
+          path: build/bin/Release/llama-NUKLIR.exe
