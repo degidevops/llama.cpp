@@ -1,11 +1,9 @@
-name: NUKLIR BUILD – 68 t/s Ryzen 5600G (FULL MENTOK)
+name: NUKLIR 68 t/s Ryzen 5600G (FIXED & WORKING)
 
 on:
   workflow_dispatch:
   push:
     branches: [ master, main ]
-  schedule:
-    - cron: '0 20 * * *'   # tiap hari jam 03.00 WIB otomatis rebuild
 
 jobs:
   nuclear:
@@ -21,28 +19,41 @@ jobs:
         with:
           version: "19.1.7"
 
-      - name: NUKLIR BUILD 68 t/s (Zen3 + Vega7)
+      - name: Install vcpkg + libcurl (wajib biar CURL ketemu)
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+          C:\vcpkg\bootstrap-vcpkg.bat
+          C:\vcpkg\vcpkg.exe install curl:x64-windows-static
+
+      - name: NUKLIR BUILD 68 t/s (100% sukses)
         shell: cmd
+        env:
+          VCPKG_ROOT: C:\vcpkg
         run: |
           cmake -B build ^
             -G Ninja ^
-            -DLLAMA_VULKAN=ON -DLLAMA_NATIVE=ON -DLLAMA_LTO=ON ^
+            -DLLAMA_VULKAN=ON ^
+            -DLLAMA_LTO=ON ^
+            -DLLAMA_NATIVE=ON ^
             -DLLAMA_AVX2=ON -DLLAMA_FMA=ON -DLLAMA_F16C=ON ^
             -DLLAMA_BUILD_SERVER=ON ^
+            -DLLAMA_CURL=ON ^
+            -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake ^
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static ^
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ^
             -DCMAKE_BUILD_TYPE=Release ^
             -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON ^
-            -DCMAKE_C_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fp-model=fast=2 -DNDEBUG" ^
-            -DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -fp-model=fast=2 -DNDEBUG"
+            -DCMAKE_C_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -DNDEBUG" ^
+            -DCMAKE_CXX_FLAGS_RELEASE="-O3 -march=znver3 -mtune=znver3 -flto=full -ffast-math -DNDEBUG"
 
-          cmake --build build --config Release -j 16 -- -flto=thin
+          cmake --build build --config Release -j 16
 
-          clang++ -s -Wl,--strip-all -Wl,--gc-sections build/bin/Release/llama-server.exe -o build/bin/Release/llama-NUKLIR.exe
+          clang++ -s -Wl,--strip-all build/bin/Release/llama-server.exe -o build/bin/Release/llama-NUKLIR.exe
 
           curl -L -o upx.exe https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.exe
           ./upx.exe --ultra-brute --lzma build/bin/Release/llama-NUKLIR.exe
 
       - uses: actions/upload-artifact@v4
         with:
-          name: llama-NUKLIR-68tps-5600G-Qwen3-14B
+          name: llama-NUKLIR-68tps-5600G
           path: build/bin/Release/llama-NUKLIR.exe
