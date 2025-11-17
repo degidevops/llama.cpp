@@ -1,4 +1,4 @@
-name: NUKLIR 68 t/s Ryzen 5600G (FINAL – LINKER FIX)
+name: NUKLIR 68 t/s Ryzen 5600G (FINAL – ENV DI STEP)
 
 on:
   workflow_dispatch:
@@ -9,10 +9,6 @@ jobs:
   nuclear:
     runs-on: windows-2025
     timeout-minutes: 45
-    env:
-      MSVC_LIB: ${{ steps.paths.outputs.MSVC_LIB }}
-      WINSDK_UM: ${{ steps.paths.outputs.WINSDK_UM }}
-      WINSDK_UCRT: ${{ steps.paths.outputs.WINSDK_UCRT }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -48,7 +44,7 @@ jobs:
           $sdkRootShort = $sdkRoot -replace 'C:\\Program Files \(x86\)', 'C:\PROGRA~2' -replace 'Windows Kits', 'WI3CF2~1'
 
           $dirs = Get-ChildItem $sdkRoot | Where-Object { $_.PSIsContainer -and $_.Name -match '^10\.0\.\d+\.0$' } | Sort-Object Name -Descending
-          if ($dirs.Count -eq 0) { throw "No valid SDK version found!" }
+          if ($dirs.Count -eq 0) { throw "No valid SDK version not found!" }
           $ver = $dirs[0].Name
 
           $um   = "$sdkRootShort\$ver\um\x64"
@@ -63,8 +59,12 @@ jobs:
           echo "WINSDK_UCRT=$ucrt" >> $env:GITHUB_OUTPUT
           echo "SDK_VER=$ver" >> $env:GITHUB_OUTPUT
 
-      - name: NUKLIR BUILD – FULL ENV (NO %%VAR%%)
+      - name: NUKLIR BUILD – ENV DI STEP (100% VALID)
         shell: cmd
+        env:
+          MSVC_LIB: ${{ steps.paths.outputs.MSVC_LIB }}
+          WINSDK_UM: ${{ steps.paths.outputs.WINSDK_UM }}
+          WINSDK_UCRT: ${{ steps.paths.outputs.WINSDK_UCRT }}
         run: |
           echo MSVC_LIB=%MSVC_LIB%
           echo WINSDK_UM=%WINSDK_UM%
