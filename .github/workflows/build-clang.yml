@@ -1,4 +1,4 @@
-name: FULL OPTIMIZED BUILD (FIXED CURL + ALL FEATURES)
+name: FULL OPTIMIZED BUILD
 
 on:
   workflow_dispatch:
@@ -11,7 +11,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows
           - os: windows-latest
             runner: windows-2025
             name: Windows-x64-AVX512
@@ -25,7 +24,6 @@ jobs:
             artifact_suffix: win-cuda12
             needs_cuda: true
 
-          # Linux
           - os: ubuntu-latest
             runner: ubuntu-24.04
             name: Linux-x64-AVX512
@@ -54,92 +52,74 @@ jobs:
         with:
           submodules: recursive
 
-      # ==================== INSTALL CURL (WAJIB) ====================
-      - name: Install curl + dependencies (Ubuntu)
+      - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y build-essential cmake ninja-build libcurl4-openssl-dev libvulkan-dev vulkan-tools libclang-dev libssl-dev
+          sudo apt-get install -y build-essential cmake ninja-build libcurl4-openssl-dev libvulkan-dev libclang-dev libssl-dev
 
-      - name: Install curl + vcpkg (Windows)
+      - name: Install vcpkg + curl static (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          # Install curl via chocolatey (paling gampang & reliable)
-          choco install curl -y
-          # Atau kalau mau static link pake vcpkg (lebih clean)
           git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat
-          C:\vcpkg\vcpkg install curl[core,ssl,winssl]:x64-windows-static-md
+          C:\vcpkg\vcpkg install curl[core,ssl]:x64-windows-static-md --recurse
 
-      # ==================== CUDA SETUP (kalau butuh) ====================
       - name: Setup CUDA
         if: matrix.needs_cuda
         uses: Jimver/cuda-toolkit@v0.2.15
         with:
           cuda: '12.6.2'
 
-      # ==================== MSVC SETUP (Windows only) ====================
-      - name: Setup MSVC
+      - name: Setup MSVC (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
 
-      # ==================== CMAKE CONFIG (FULL FEATURES + CURL ON) ====================
-      - name: Configure CMake
+      # <<< INI BAGIAN YANG DIPERBAIKI TOTAL >>>
+      - name: Configure CMake (NO MORE BACKSLASH BUG)
         shell: bash
+        env:
+          COMMON_FLAGS: >-
+            -DCMAKE_BUILD_TYPE=Release
+            -G Ninja
+            -DBUILD_SHARED_LIBS=OFF
+            -DLLAMA_BUILD_SERVER=ON
+            -DLLAMA_BUILD_EXAMPLES=ON
+            -DGGML_STATIC=ON
+            -DGGML_LTO=ON
+            -DLLAMA_CURL=ON
+            -DLLAMA_SUPPORT_VISION=ON
+            -DLLAMA_SUPPORT_EMBEDDING=ON
+            -DLLAMA_SUPPORT_TOOLS=ON
+            -DLLAMA_SUPPORT_INSERT=ON
         run: |
           cmake -B build \
-            -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS=OFF \
-            -DLLAMA_BUILD_SERVER=ON \
-            -DLLAMA_BUILD_EXAMPLES=ON \
-            -DGGML_STATIC=ON \
-            -DGGML_LTO=ON \
-            \
-            # SEMUA FITUR FULL ON
-            -DLLAMA_CURL=ON \                  # <--- INI YANG PENTING!
-            -DLLAMA_SUPPORT_VISION=ON \
-            -DLLAMA_SUPPORT_EMBEDDING=ON \
-            -DLLAMA_SUPPORT_TOOLS=ON \
-            -DLLAMA_SUPPORT_INSERT=ON \
-            \
-            # Backend acceleration
+            $COMMON_FLAGS \
             ${{ matrix.cmake_extra }} \
-            \
-            # Windows: vcpkg integration + max optim
             ${{ runner.os == 'Windows' && '-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static-md' || '' }} \
-            ${{ runner.os == 'Windows' && '-DCMAKE_C_FLAGS_RELEASE=\"/O2 /GL /arch:AVX512 /DNDEBUG\" -DCMAKE_CXX_FLAGS_RELEASE=\"/O2 /GL /arch:AVX512 /DNDEBUG\" -DCMAKE_EXE_LINKER_FLAGS=\"/LTCG:incremental /OPT:REF /OPT:ICF\"' || '' }} \
-            \
-            # Linux: native optim
-            ${{ runner.os == 'Linux' && '-DCMAKE_C_FLAGS=\"-O3 -march=native -mtune=native -flto=auto\" -DCMAKE_CXX_FLAGS=\"-O3 -march=native -mtune=native -flto=auto\"' || '' }}
+            ${{ runner.os == 'Windows' && '-DCMAKE_C_FLAGS_RELEASE="/O2 /GL /arch:AVX512 /DNDEBUG" -DCMAKE_CXX_FLAGS_RELEASE="/O2 /GL /arch:AVX512 /DNDEBUG" -DCMAKE_EXE_LINKER_FLAGS="/LTCG /OPT:REF /OPT:ICF"' || '' }} \
+            ${{ runner.os == 'Linux' && '-DCMAKE_C_FLAGS="-O3 -march=native -mtune=native -flto=auto -ffat-lto-objects" -DCMAKE_CXX_FLAGS="-O3 -march=native -mtune=native -flto=auto -ffat-lto-objects"' || '' }}
 
-      - name: Build (max parallel)
-        run: cmake --build build --config Release -j $(nproc || echo 16)
+      - name: Build
+        run: cmake --build build --config Release -j $(nproc 2>/dev/null || echo 16)
 
-      # ==================== UPX COMPRESSION ====================
       - name: Download UPX
         run: |
           curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-${{ runner.os == 'Windows' && 'win64' || 'amd64_linux' }}.zip
-          unzip upx.zip
-          mv upx-*/upx.exe . 2>/dev/null || mv upx-*/upx .
-          chmod +x upx* 2>/dev/null || true
+          unzip -o upx.zip
+          mv upx-*/upx* . || mv upx-*/upx.exe .
 
       - name: Compress with UPX
+        continue-on-error: true
         run: |
-          ./upx* --best --lzma build/bin/llama-server* || true
-          ./upx* --best --lzma build/bin/llama-cli* || true
+          ./upx* --best --lzma build/bin/llama-server* build/bin/llama-cli* || true
 
-      # ==================== RENAME & UPLOAD ====================
-      - name: Prepare release binaries
-        shell: bash
+      - name: Prepare artifacts
         run: |
-          mkdir -p release
+          mkdir release
           cp build/bin/llama-server* release/llama-server-${{ matrix.artifact_suffix }}${{ runner.os == 'Windows' && '.exe' || '' }}
           cp build/bin/llama-cli*    release/llama-cli-${{ matrix.artifact_suffix }}${{ runner.os == 'Windows' && '.exe' || '' }}
-          ls -lh release/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
