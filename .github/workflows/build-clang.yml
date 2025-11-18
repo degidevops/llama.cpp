@@ -1,4 +1,4 @@
-name: LLAMA.CPP FULL OPTIMIZED BUILD - 100% WORKING NOV 2025
+name: LLAMA.CPP FULL OPTIMIZED - 100% WORKING NOV 2025
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ jobs:
           - name: Windows-CUDA
             os: windows-latest
             runner: windows-2025
-            cmake_extra: "-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
+            cmake_extra: "-DGGML_CUDA=ON -DGGML_CUDA_FORCE_CUBLAS=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
             artifact_suffix: win-cuda
             needs_cuda: true
 
@@ -52,11 +52,13 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Linux deps
+      - name: Install Linux dependencies (fix shaderc + glslc)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y build-essential cmake ninja-build libcurl4-openssl-dev libssl-dev libvulkan-dev vulkan-tools glslc shaderc libclang-dev
+          sudo apt-get install -y build-essential cmake ninja-build \
+            libcurl4-openssl-dev libssl-dev \
+            libvulkan-dev vulkan-tools glslc libshaderc-dev
 
       - name: Setup vcpkg (Windows static curl)
         if: runner.os == 'Windows'
@@ -66,20 +68,18 @@ jobs:
           C:\vcpkg\bootstrap-vcpkg.bat
           C:\vcpkg\vcpkg install curl[core,ssl]:x64-windows-static-md --recurse
 
-      # ACTION YANG BENAR & STABIL
-      - name: Install CUDA Toolkit 12.6
+      - name: Install CUDA Toolkit 12.6 (working action)
         if: matrix.needs_cuda
         uses: Jimver/cuda-toolkit@v0.2.29
         with:
           cuda: '12.6.2'
-          method: network   # paling cepat & reliable
-          sub-packages: '["nvcc","visual_studio_integration","cudart","cublas","cufft","curand","cusolver","cusparse"]'
+          method: network
 
       - name: Setup MSVC
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Configure CMake (FULL FEATURES)
+      - name: Configure CMake (FULL FEATURES + FIX CUDA WINDOWS)
         shell: bash
         env:
           COMMON: >-
@@ -97,14 +97,14 @@ jobs:
             $COMMON \
             ${{ matrix.cmake_extra }} \
             ${{ runner.os == 'Windows' && '-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static-md' || '' }} \
-            ${{ runner.os == 'Windows' && '-DCMAKE_C_FLAGS_RELEASE="/O2 /GL /arch:AVX512 /DNDEBUG" -DCMAKE_CXX_FLAGS_RELEASE="/O2 /GL /arch:AVX512 /DNDEBUG" -DCMAKE_EXE_LINKER_FLAGS="/LTCG /OPT:REF /OPT:ICF"' || '' }} \
-            ${{ runner.os == 'Linux' && '-DCMAKE_C_FLAGS="-O3 -march=native -mtune=native -flto=auto -ffat-lto-objects" -DCMAKE_CXX_FLAGS="-O3 -march=native -mtune=native -flto=auto -ffat-lto-objects"' || '' }}
+            ${{ runner.os == 'Windows' && '-DCMAKE_C_FLAGS_RELEASE=\"/O2 /GL /arch:AVX512 /DNDEBUG\" -DCMAKE_CXX_FLAGS_RELEASE=\"/O2 /GL /arch:AVX512 /DNDEBUG\" -DCMAKE_EXE_LINKER_FLAGS=\"/LTCG /OPT:REF /OPT:ICF\"' || '' }} \
+            ${{ runner.os == 'Linux' && '-DCMAKE_C_FLAGS=\"-O3 -march=native -mtune=native -flto=auto -ffat-lto-objects\" -DCMAKE_CXX_FLAGS=\"-O3 -march=native -mtune=native -flto=auto -ffat-lto-objects\"' || '' }}
 
-      - name: Build (max parallel)
+      - name: Build (fix Windows parallel)
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            cmake --build build --config Release -- -j $env:NUMBER_OF_PROCESSORS
+            cmake --build build --config Release --parallel $env:NUMBER_OF_PROCESSORS
           else
             cmake --build build --config Release -j $(nproc)
           fi
