@@ -1,4 +1,4 @@
-name: llama.cpp - ULTIMATE FULL FEATURES + MAX OPTIMIZED (Nov 2025)
+name: llama.cpp - FULL 2025 (Tools + Vision + Embedding + FlashAttn + Optimasi Rata Kanan)
 
 on:
   workflow_dispatch:
@@ -11,38 +11,46 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: win-avx512-ultimate
+          # === WINDOWS FULL ===
+          - name: win-full-avx512
             os: windows-latest
-            cmake_flags: "-DGGML_AVX512=ON -DGGML_AVX512_VBMI=ON -DGGML_AVX512_VNNI=ON -DGGML_AVX512_BF16=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_F16C=ON -DGGML_FMA=ON -DGGML_LTO=ON"
-            artifact: llama-win-avx512-ultimate.exe
-          - name: win-cuda-ultimate
+            cmake_flags: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_NATIVE=ON -DLLAMA_EMBEDDING=ON"
+            artifact: llama-win-full-avx512.exe
+
+          - name: win-full-cuda
             os: windows-latest
-            cmake_flags: "-DGGML_CUDA=ON -DGGML_CUDA_F16=ON -DGGML_LTO=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
-            artifact: llama-win-cuda-ultimate.exe
+            cmake_flags: "-DGGML_CUDA=ON -DGGML_CUDA_FLASH_ATTN=ON -DGGML_CUDA_FORCE_CUBLAS=ON -DGGML_CUDA_F16=ON -DLLAMA_EMBEDDING=ON -DCMAKE_CUDA_ARCHITECTURES=native"
+            artifact: llama-win-full-cuda.exe
             cuda: true
-          - name: linux-avx512-ultimate
+
+          # === LINUX FULL ===
+          - name: linux-full-avx512
             os: ubuntu-latest
-            cmake_flags: "-DGGML_AVX512=ON -DGGML_AVX512_VBMI=ON -DGGML_AVX512_VNNI=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_F16C=ON -DGGML_FMA=ON -DGGML_NATIVE=ON -DGGML_LTO=ON"
-            artifact: llama-linux-avx512-ultimate
-          - name: linux-cuda-ultimate
+            cmake_flags: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_NATIVE=ON -DLLAMA_EMBEDDING=ON -DLLAMA_RPC=ON"
+            artifact: llama-linux-full-avx512
+
+          - name: linux-full-cuda
             os: ubuntu-latest
-            cmake_flags: "-DGGML_CUDA=ON -DGGML_CUDA_F16=ON -DGGML_LTO=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
-            artifact: llama-linux-cuda-ultimate
+            cmake_flags: "-DGGML_CUDA=ON -DGGML_CUDA_FLASH_ATTN=ON -DGGML_CUDA_FORCE_CUBLAS=ON -DGGML_CUDA_F16=ON -DLLAMA_EMBEDDING=ON -DCMAKE_CUDA_ARCHITECTURES=native"
+            artifact: llama-linux-full-cuda
             cuda: true
-          - name: linux-vulkan-ultimate
+
+          - name: linux-full-vulkan
             os: ubuntu-latest
-            cmake_flags: "-DGGML_VULKAN=ON -DGGML_NATIVE=ON -DGGML_LTO=ON"
-            artifact: llama-linux-vulkan-ultimate
+            cmake_flags: "-DGGML_VULKAN=ON -DGGML_VULKAN_SHADERC=ON -DLLAMA_EMBEDDING=ON -DLLAMA_RPC=ON"
+            artifact: llama-linux-full-vulkan
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout llama.cpp with latest tools PRs (Nov 2025)
         uses: actions/checkout@v4
         with:
+          repository: ggerganov/llama.cpp
+          ref: master                     # sudah include semua PR tools/vision sampai Nov 2025
           submodules: recursive
 
-      - name: Install Linux dependencies
+      - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
           sudo apt update -qq
@@ -55,11 +63,11 @@ jobs:
           cuda: "12.6.2"
           method: network
 
-      - name: Setup MSVC (Windows)
+      - name: Setup MSVC
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Install libcurl via vcpkg (Windows only)
+      - name: Install libcurl Windows (vcpkg)
         if: runner.os == 'Windows'
         shell: bash
         run: |
@@ -68,7 +76,7 @@ jobs:
           ./vcpkg/vcpkg install curl:x64-windows-static-md --triplet x64-windows-static-md
           echo "VCPKG_ROOT=$(pwd)/vcpkg" >> $GITHUB_ENV
 
-      - name: CMake Configure - FULL FEATURES + MAX OPTIMIZED
+      - name: CMake Configure FULL 2025
         shell: bash
         run: |
           cmake -B build -G Ninja \
@@ -76,26 +84,23 @@ jobs:
             -DLLAMA_BUILD_SERVER=ON \
             -DLLAMA_BUILD_EXAMPLES=ON \
             -DLLAMA_CURL=ON \
-            -DLLAMA_TOOL_USE=ON \        # ← Tool / Function Calling FULL
-            -DLLAMA_MULTIMODAL=ON \      # ← Vision / Llava / Llama-3.2-Vision
-            -DLLAMA_EMBEDDING=ON \       # ← llama-embedding binary
-            -DLLAMA_LTO=ON \             # ← Link Time Optimization (speed++)
+            -DLLAMA_EMBEDDING=ON \
             ${{ runner.os == 'Windows' && '-DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static-md' || '' }} \
             ${{ matrix.cmake_flags }}
 
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      # ==================== UPX ULTIMATE (ultra-brute = terkecil sedunia) ====================
-      - name: Get latest UPX version
+      # UPX Auto Forever (sama seperti sebelumnya, sudah fix Windows)
+      - name: Get latest UPX
         id: upx
         shell: pwsh
         run: |
-          $json = Invoke-WebRequest -Uri https://api.github.com/repos/upx/upx/releases/latest -UseBasicParsing | ConvertFrom-Json
-          $ver = $json.tag_name -replace '^v', ''
+          $json = Invoke-WebRequest https://api.github.com/repos/upx/upx/releases/latest -UseBasicParsing | ConvertFrom-Json
+          $ver = $json.tag_name -replace '^v',''
           "version=$ver" >> $env:GITHUB_OUTPUT
 
-      - name: Download & extract UPX (Linux)
+      - name: Download UPX Linux
         if: runner.os == 'Linux'
         run: |
           VER=${{ steps.upx.outputs.version }}
@@ -103,43 +108,38 @@ jobs:
           tar -xJf upx.tar.xz --strip-components=1
           chmod +x upx
 
-      - name: Download & extract UPX (Windows)
+      - name: Download UPX Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $ver = "${{ steps.upx.outputs.version }}"
-          Invoke-WebRequest -Uri "https://github.com/upx/upx/releases/download/v$ver/upx-$ver-win64.zip" -OutFile upx.zip
-          Expand-Archive -Path upx.zip -DestinationPath . -Force
+          Invoke-WebRequest "https://github.com/upx/upx/releases/download/v$ver/upx-$ver-win64.zip" -OutFile upx.zip
+          Expand-Archive upx.zip . -Force
           Move-Item "upx-*-win64/upx.exe" upx.exe -Force
 
-      - name: Compress with UPX --ultra-brute (paling kecil!)
+      - name: UPX Compress
         continue-on-error: true
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
-            ./upx.exe --ultra-brute "build/bin/llama-server.exe" "build/bin/llama-cli.exe" "build/bin/llama-embedding.exe" 2>nul || true
+            ./upx.exe --best --lzma build/bin/*.exe 2>nul || true
           else
-            ./upx --ultra-brute build/bin/Release/llama-server build/bin/Release/llama-cli build/bin/Release/llama-embedding 2>/dev/null || true
+            ./upx --best --lzma build/bin/llama-* build/bin/Release/llama-* 2>/dev/null || true
           fi
 
-      # ==================== PREPARE ARTIFACTS (PATH BENAR 2025) ====================
       - name: Prepare artifacts
         shell: bash
         run: |
           mkdir -p release
           if [ "${{ runner.os }}" = "Windows" ]; then
-            # Windows → build/bin/
             cp build/bin/llama-server.exe release/${{ matrix.artifact }}
             [ -f build/bin/llama-cli.exe ] && cp build/bin/llama-cli.exe release/llama-cli-${{ matrix.artifact }} || true
-            [ -f build/bin/llama-embedding.exe ] && cp build/bin/llama-embedding.exe release/llama-embedding-${{ matrix.artifact }} || true
           else
-            # Linux → build/bin/Release/
-            cp build/bin/Release/llama-server release/${{ matrix.artifact }}
-            [ -f build/bin/Release/llama-cli ] && cp build/bin/Release/llama-cli release/llama-cli-${{ matrix.artifact }} || true
-            [ -f build/bin/Release/llama-embedding ] && cp build/bin/Release/llama-embedding release/llama-embedding-${{ matrix.artifact }} || true
+            cp build/bin/llama-server release/${{ matrix.artifact }}
+            [ -f build/bin/llama-cli ] && cp build/bin/llama-cli release/llama-cli-${{ matrix.artifact }} || true
           fi
 
-      - name: Upload artifacts
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
