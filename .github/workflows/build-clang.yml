@@ -1,4 +1,4 @@
-name: LLAMA.CPP FULL OPTIMIZED - 100% WORKING NOV 2025
+name: llama.cpp - Full Optimized Binaries (Win + Linux + All Backends)
 
 on:
   workflow_dispatch:
@@ -11,131 +11,94 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Windows-AVX512
+          # Windows CPU maksimal
+          - name: win-avx512
             os: windows-latest
-            runner: windows-2025
-            cmake_extra: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_FMA=ON -DGGML_F16C=ON"
-            artifact_suffix: win-avx512
+            cmake_flags: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_F16C=ON -DGGML_FMA=ON"
+            artifact: llama-win-avx512.exe
 
-          - name: Windows-CUDA
+          # Windows CUDA full
+          - name: win-cuda
             os: windows-latest
-            runner: windows-2025
-            cmake_extra: "-DGGML_CUDA=ON -DGGML_CUDA_FORCE_CUBLAS=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
-            artifact_suffix: win-cuda
-            needs_cuda: true
+            cmake_flags: "-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
+            artifact: llama-win-cuda.exe
+            cuda: true
 
-          - name: Linux-AVX512
+          # Linux CPU maksimal
+          - name: linux-avx512
             os: ubuntu-latest
-            runner: ubuntu-24.04
-            cmake_extra: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_NATIVE=ON"
-            artifact_suffix: linux-avx512
+            cmake_flags: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_F16C=ON -DGGML_FMA=ON -DGGML_NATIVE=ON"
+            artifact: llama-linux-avx512
 
-          - name: Linux-CUDA
+          # Linux CUDA full
+          - name: linux-cuda
             os: ubuntu-latest
-            runner: ubuntu-24.04
-            cmake_extra: "-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
-            artifact_suffix: linux-cuda
-            needs_cuda: true
+            cmake_flags: "-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
+            artifact: llama-linux-cuda
+            cuda: true
 
-          - name: Linux-Vulkan
+          # Linux Vulkan full
+          - name: linux-vulkan
             os: ubuntu-latest
-            runner: ubuntu-24.04
-            cmake_extra: "-DGGML_VULKAN=ON -DGGML_NATIVE=ON"
-            artifact_suffix: linux-vulkan
+            cmake_flags: "-DGGML_VULKAN=ON -DGGML_NATIVE=ON"
+            artifact: llama-linux-vulkan
 
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # ===================== LINUX DEPS =====================
-      - name: Install Linux dependencies
+      - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y build-essential cmake ninja-build libcurl4-openssl-dev libssl-dev libvulkan-dev vulkan-tools glslc libshaderc-dev
+          sudo apt update -qq
+          sudo apt install -y build-essential cmake ninja-build libcurl4-openssl-dev libvulkan-dev glslc libshaderc-dev
 
-      # ===================== WINDOWS VCPKG (curl static) =====================
-      - name: Setup vcpkg (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
-          C:\vcpkg\bootstrap-vcpkg.bat
-          C:\vcpkg\vcpkg install curl[core,ssl]:x64-windows-static-md --recurse
-
-      # ===================== CUDA (working & stable) =====================
-      - name: Install CUDA 12.6
-        if: matrix.needs_cuda
+      - name: Install CUDA (stable & working 2025)
+        if: matrix.cuda
         uses: Jimver/cuda-toolkit@v0.2.29
         with:
-          cuda: '12.6.2'
+          cuda: "12.6.2"
           method: network
 
-      # ===================== MSVC =====================
-      - name: Setup MSVC
+      - name: Setup MSVC (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      # ===================== CMAKE (QUOTES FIX + NO -ffat-lto-objects) =====================
-      - name: Configure CMake
-        shell: bash
+      - name: CMake Configure (FULL FEATURES - NO EXTRA FLAGS THAT BREAK)
         run: |
-          cmake -B build \
-            -G Ninja \
+          cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS=OFF \
             -DLLAMA_BUILD_SERVER=ON \
             -DLLAMA_BUILD_EXAMPLES=ON \
-            -DGGML_STATIC=ON \
-            -DGGML_LTO=ON \
             -DLLAMA_CURL=ON \
-            -DLLAMA_SUPPORT_VISION=ON \
-            -DLLAMA_SUPPORT_EMBEDDING=ON \
-            -DLLAMA_SUPPORT_TOOLS=ON \
-            -DLLAMA_SUPPORT_INSERT=ON \
-            ${{ matrix.cmake_extra }} \
-            ${{ runner.os == 'Windows' && '-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static-md' || '' }} \
-            ${{ runner.os == 'Windows' && '-DCMAKE_C_FLAGS_RELEASE=\"/O2 /GL /arch:AVX512 /DNDEBUG\" -DCMAKE_CXX_FLAGS_RELEASE=\"/O2 /GL /arch:AVX512 /DNDEBUG\" -DCMAKE_EXE_LINKER_FLAGS_RELEASE=\"/LTCG:incremental /OPT:REF /OPT:ICF\"' || '' }} \
-            ${{ runner.os == 'Linux' && '-DCMAKE_C_FLAGS=\"-O3 -march=native -mtune=native -flto\" -DCMAKE_CXX_FLAGS=\"-O3 -march=native -mtune=native -flto\"' || '' }}
+            ${{ matrix.cmake_flags }}
 
-      # ===================== BUILD (Windows parallel fix) =====================
-      - name: Build
-        shell: bash
-        run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            cmake --build build --config Release --parallel $env:NUMBER_OF_PROCESSORS
-          else
-            cmake --build build --config Release -j $(nproc)
-          fi
+      - name: Build (max parallel - no broken flags)
+        run: cmake --build build --config Release --parallel
 
-      # ===================== UPX =====================
       - name: Download UPX
         run: |
           curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-${{ runner.os == 'Windows' && 'win64' || 'amd64_linux' }}.zip
           unzip -o upx.zip
-          chmod +x upx*/upx* 2>/dev/null || true
 
-      - name: Compress with UPX
+      - name: Compress with UPX (ultra)
         continue-on-error: true
         run: |
-          ./upx*/upx* --best --lzma build/bin/llama-server* build/bin/llama-cli* || true
+          ./*/upx --best --lzma build/bin/llama-server.exe build/bin/llama-cli.exe 2>/dev/null || true
+          ./*/upx --best --lzma build/bin/llama-server build/bin/llama-cli 2>/dev/null || true
 
-      # ===================== ARTIFAK =====================
-      - name: Prepare release
+      - name: Rename & pack
         run: |
           mkdir release
-          suffix="${{ matrix.artifact_suffix }}${{ runner.os == 'Windows' && '.exe' || '' }}"
-          cp build/bin/llama-server* release/llama-server-$suffix 2>/dev/null || true
-          cp build/bin/llama-cli*    release/llama-cli-$suffix 2>/dev/null || true
-          ls -lh release/
+          cp build/bin/llama-server* release/${{ matrix.artifact }} || true
+          cp build/bin/llama-cli*    release/llama-cli-${{ matrix.artifact }} || true
 
-      - name: Upload Artifacts
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: llama.cpp-${{ matrix.name }}
+          name: ${{ matrix.name }}
           path: release/*
