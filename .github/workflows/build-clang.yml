@@ -59,7 +59,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      # CURL untuk Windows via vcpkg
+      # CURL ON di Windows via vcpkg
       - name: Install libcurl via vcpkg (Windows only)
         if: runner.os == 'Windows'
         shell: bash
@@ -83,7 +83,7 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      # ==================== UPX AUTO SELAMANYA (FIX WINDOWS PATH 2025) ====================
+      # ==================== UPX AUTO + PATH BENAR 2025 ====================
       - name: Get latest UPX version
         id: upx
         shell: pwsh
@@ -113,32 +113,28 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          # Path otomatis sesuai OS (Ninja style 2024-2025)
           if [ "${{ runner.os }}" = "Windows" ]; then
-            ./upx.exe --best --lzma build/llama-server.exe build/llama-cli.exe 2>nul || true
+            # Windows: path ada di Release/
+            ./upx.exe --best --lzma "build/bin/Release/llama-server.exe" "build/bin/Release/llama-cli.exe" 2>nul || true
           else
-            ./upx --best --lzma build/llama-server build/llama-cli 2>/dev/null || true
+            # Linux: langsung di bin/
+            ./upx --best --lzma build/bin/llama-server build/bin/llama-cli 2>/dev/null || true
           fi
 
-      - name: Prepare artifacts
+      - name: Prepare artifacts (PATH SUDAH BENAR!)
         shell: bash
         run: |
           mkdir release
 
-          # Path yang benar untuk Ninja (Windows & Linux sama-sama di build/)
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cp build/llama-server.exe release/${{ matrix.artifact }}
-            [ -f build/llama-cli.exe ] && cp build/llama-cli.exe release/llama-cli-${{ matrix.artifact }} || true
+            # Windows → build/bin/Release/
+            cp build/bin/Release/llama-server.exe release/${{ matrix.artifact }}
+            [ -f build/bin/Release/llama-cli.exe ] && cp build/bin/Release/llama-cli.exe release/llama-cli-${{ matrix.artifact }} || true
           else
-            cp build/llama-server release/${{ matrix.artifact }}
-            [ -f build/llama-cli ] && cp build/llama-cli release/llama-cli-${{ matrix.artifact }} || true
+            # Linux → build/bin/
+            cp build/bin/llama-server release/${{ matrix.artifact }}
+            [ -f build/bin/llama-cli ] && cp build/bin/llama-cli release/llama-cli-${{ matrix.artifact }} || true
           fi
-
-          # Debug: list isi folder biar yakin
-          echo "=== Isi folder build/ ==="
-          ls -la build/
-          echo "=== Isi folder release/ ==="
-          ls -la release/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
