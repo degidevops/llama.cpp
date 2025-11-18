@@ -83,7 +83,7 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      # ==================== UPX AUTO + PATH BENAR 2025 ====================
+      # ==================== UPX AUTO SELAMANYA (WINDOWS FIX 100%) ====================
       - name: Get latest UPX version
         id: upx
         shell: pwsh
@@ -91,6 +91,7 @@ jobs:
           $json = Invoke-WebRequest -Uri https://api.github.com/repos/upx/upx/releases/latest -UseBasicParsing | ConvertFrom-Json
           $ver = $json.tag_name -replace '^v', ''
           "version=$ver" >> $env:GITHUB_OUTPUT
+          Write-Host "Latest UPX version: $ver"
 
       - name: Download & extract UPX (Linux)
         if: runner.os == 'Linux'
@@ -109,31 +110,30 @@ jobs:
           Expand-Archive -Path upx.zip -DestinationPath . -Force
           Move-Item "upx-*-win64/upx.exe" upx.exe -Force
 
-      - name: Compress with UPX
+      - name: Compress with UPX (best + lzma)
         continue-on-error: true
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
-            # Windows: path ada di Release/
-            ./upx.exe --best --lzma "build/bin/Release/llama-server.exe" "build/bin/Release/llama-cli.exe" 2>nul || true
+            ./upx.exe --best --lzma "build/bin/llama-server.exe" "build/bin/llama-cli.exe" 2>nul || true
           else
-            # Linux: langsung di bin/
-            ./upx --best --lzma build/bin/llama-server build/bin/llama-cli 2>/dev/null || true
+            ./upx --best --lzma build/bin/Release/llama-server build/bin/Release/llama-cli 2>/dev/null || true
           fi
 
-      - name: Prepare artifacts (PATH SUDAH BENAR!)
+      # ==================== PATH BENAR 2025 (Windows ≠ Linux) ====================
+      - name: Prepare artifacts (Path fix Nov 2025)
         shell: bash
         run: |
-          mkdir release
+          mkdir -p release
 
           if [ "${{ runner.os }}" = "Windows" ]; then
-            # Windows → build/bin/Release/
-            cp build/bin/Release/llama-server.exe release/${{ matrix.artifact }}
-            [ -f build/bin/Release/llama-cli.exe ] && cp build/bin/Release/llama-cli.exe release/llama-cli-${{ matrix.artifact }} || true
+            # Windows: binary langsung di build/bin/
+            cp build/bin/llama-server.exe release/${{ matrix.artifact }}
+            [ -f build/bin/llama-cli.exe ] && cp build/bin/llama-cli.exe release/llama-cli-${{ matrix.artifact }} || echo "llama-cli not built"
           else
-            # Linux → build/bin/
-            cp build/bin/llama-server release/${{ matrix.artifact }}
-            [ -f build/bin/llama-cli ] && cp build/bin/llama-cli release/llama-cli-${{ matrix.artifact }} || true
+            # Linux: binary di build/bin/Release/
+            cp build/bin/Release/llama-server release/${{ matrix.artifact }}
+            [ -f build/bin/Release/llama-cli ] && cp build/bin/Release/llama-cli release/llama-cli-${{ matrix.artifact }} || echo "llama-cli not built"
           fi
 
       - name: Upload artifacts
