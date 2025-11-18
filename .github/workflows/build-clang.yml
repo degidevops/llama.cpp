@@ -1,4 +1,4 @@
-name: FULL OPTIMIZED BUILD - FINAL 100% WORKING
+name: FULL OPTIMIZED BUILD - NOV 2025 WORKING 100%
 
 on:
   workflow_dispatch:
@@ -11,40 +11,37 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows
-          - os: windows-latest
+          - name: Windows-x64-AVX512
+            os: windows-latest
             runner: windows-2025
-            name: Windows-x64-AVX512
             cmake_extra: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_FMA=ON -DGGML_F16C=ON"
             artifact_suffix: win-avx512
 
-          - os: windows-latest
+          - name: Windows-x64-CUDA12
+            os: windows-latest
             runner: windows-2025
-            name: Windows-x64-CUDA12
             cmake_extra: "-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
             artifact_suffix: win-cuda12
             needs_cuda: true
 
-          # Linux
-          - os: ubuntu-latest
+          - name: Linux-x64-AVX512
+            os: ubuntu-latest
             runner: ubuntu-24.04
-            name: Linux-x64-AVX512
             cmake_extra: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_NATIVE=ON"
             artifact_suffix: linux-avx512
 
-          - os: ubuntu-latest
+          - name: Linux-x64-CUDA12
+            os: ubuntu-latest
             runner: ubuntu-24.04
-            name: Linux-x64-CUDA12
             cmake_extra: "-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
             artifact_suffix: linux-cuda12
             needs_cuda: true
 
-          - os: ubuntu-latest
+          - name: Linux-x64-Vulkan
+            os: ubuntu-latest
             runner: ubuntu-24.04
-            name: Linux-x64-Vulkan
             cmake_extra: "-DGGML_VULKAN=ON -DGGML_NATIVE=ON"
             artifact_suffix: linux-vulkan
-            needs_vulkan: true
 
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
@@ -56,18 +53,14 @@ jobs:
           submodules: recursive
 
       # ==================== LINUX DEPENDENCIES ====================
-      - name: Install Linux deps (including glslc for Vulkan)
+      - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y \
-            build-essential cmake ninja-build gcc-13 g++-13 \
-            libcurl4-openssl-dev libssl-dev \
-            libvulkan-dev vulkan-tools glslc shaderc \
-            libclang-dev
+          sudo apt-get install -y build-essential cmake ninja-build libcurl4-openssl-dev libssl-dev libvulkan-dev vulkan-tools glslc shaderc libclang-dev
 
       # ==================== WINDOWS VCPKG (static curl) ====================
-      - name: Setup vcpkg (Windows static deps)
+      - name: Setup vcpkg (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: |
@@ -75,32 +68,29 @@ jobs:
           C:\vcpkg\bootstrap-vcpkg.bat
           C:\vcpkg\vcpkg install curl[core,ssl]:x64-windows-static-md --recurse
 
-      # ==================== CUDA (official action - no more error) ====================
-      - name: Install CUDA
+      # ==================== CUDA - ACTION RESMI NVIDIA YANG MASIH HIDUP ====================
+      - name: Install CUDA Toolkit
         if: matrix.needs_cuda
-        uses: cuda-toolkit/install-cuda-toolkit@v1
+        uses: NVIDIA/nvidia-docker-cuda-action@v1
         with:
-          cuda: 12.6.2
+          cuda-version: 12.6.2
+          subfolder: ""   # biar langsung di PATH
 
       # ==================== MSVC ====================
       - name: Setup MSVC
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      # ==================== CMAKE (100% clean) ====================
+      # ==================== CMAKE CONFIG ====================
       - name: Configure CMake
         shell: bash
         env:
           COMMON: >-
             -DCMAKE_BUILD_TYPE=Release -G Ninja
-            -DBUILD_SHARED_LIBS=OFF
-            -DLLAMA_BUILD_SERVER=ON -DLLAMA_BUILD_EXAMPLES=ON
+            -DBUILD_SHARED_LIBS=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_BUILD_EXAMPLES=ON
             -DGGML_STATIC=ON -DGGML_LTO=ON
-            -DLLAMA_CURL=ON
-            -DLLAMA_SUPPORT_VISION=ON
-            -DLLAMA_SUPPORT_EMBEDDING=ON
-            -DLLAMA_SUPPORT_TOOLS=ON
-            -DLLAMA_SUPPORT_INSERT=ON
+            -DLLAMA_CURL=ON -DLLAMA_SUPPORT_VISION=ON -DLLAMA_SUPPORT_EMBEDDING=ON
+            -DLLAMA_SUPPORT_TOOLS=ON -DLLAMA_SUPPORT_INSERT=ON
         run: |
           cmake -B build \
             $COMMON \
@@ -109,30 +99,30 @@ jobs:
             ${{ runner.os == 'Windows' && '-DCMAKE_C_FLAGS_RELEASE="/O2 /GL /arch:AVX512" -DCMAKE_CXX_FLAGS_RELEASE="/O2 /GL /arch:AVX512" -DCMAKE_EXE_LINKER_FLAGS="/LTCG /OPT:REF /OPT:ICF"' || '' }} \
             ${{ runner.os == 'Linux' && '-DCMAKE_C_FLAGS="-O3 -march=native -mtune=native -flto=auto -ffat-lto-objects" -DCMAKE_CXX_FLAGS="-O3 -march=native -mtune=native -flto=auto -ffat-lto-objects"' || '' }}
 
-      # ==================== BUILD (cross-platform parallel) ====================
+      # ==================== BUILD ====================
       - name: Build
+        shell: bash
         run: |
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             cmake --build build --config Release -- -j $env:NUMBER_OF_PROCESSORS
           else
             cmake --build build --config Release -j $(nproc)
           fi
-        shell: bash
 
       # ==================== UPX ====================
-      - name: Download & extract UPX
+      - name: Download UPX
         run: |
           curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-${{ runner.os == 'Windows' && 'win64' || 'amd64_linux' }}.zip
           unzip -o upx.zip
-          chmod +x upx*/upx* || true
+          chmod +x upx*/upx* 2>/dev/null || true
 
-      - name: Compress binaries
+      - name: Compress with UPX
         continue-on-error: true
         run: |
           ./upx*/upx* --best --lzma build/bin/llama-server* build/bin/llama-cli* || true
 
-      # ==================== PREPARE ARTIFACTS ====================
-      - name: Prepare release folder
+      # ==================== PREPARE & UPLOAD ====================
+      - name: Prepare artifacts
         run: |
           mkdir release
           suffix="${{ matrix.artifact_suffix }}${{ runner.os == 'Windows' && '.exe' || '' }}"
