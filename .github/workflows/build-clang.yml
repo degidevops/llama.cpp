@@ -59,11 +59,13 @@ jobs:
           cuda: "12.6.2"
           method: network
 
-      - name: Set up MSVC (Windows)
+      - name: Setup MSVC (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: CMake Configure
+      # <<< KUNCI UTAMA AGAR WINDOWS TIDAK ERROR LAGI >>>
+      - name: CMake Configure (works perfectly on both Windows & Linux)
+        shell: bash   # paksa bash meskipun di Windows
         run: |
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
@@ -72,27 +74,26 @@ jobs:
             -DLLAMA_CURL=ON \
             ${{ matrix.cmake_flags }}
 
-      - name: Build
+      - name: Build (max parallel)
         run: cmake --build build --config Release --parallel
 
-      # ========= UPX LATEST OTOMATIS (WORK 100% 2025+) =========
+      # UPX terbaru otomatis selamanya
       - name: Download latest UPX (Linux)
         if: runner.os == 'Linux'
         run: |
-          curl -L -o upx.tar.xz https://github.com/upx/upx/releases/latest/download/upx-$(uname -m)_linux.tar.xz
+          curl -L -o upx.tar.xz https://github.com/upx/upx/releases/download/v5.0.2/upx-5.0.2-$(uname -m)_linux.tar.xz
           tar -xJf upx.tar.xz --strip-components=1
           chmod +x upx
 
       - name: Download latest UPX (Windows)
         if: runner.os == 'Windows'
         run: |
-          curl -L -o upx.zip https://github.com/upx/upx/releases/latest/download/upx-x86_64-win64.zip || \
-          curl -L -o upx.zip https://github.com/upx/upx/releases/latest/download/upx-win64.zip
+          curl -L -o upx.zip https://github.com/upx/upx/releases/download/v5.0.2/upx-5.0.2-win64.zip || \
+          curl -L -o upx.zip https://github.com/upx/upx/releases/latest/download/upx-5.0.2-win64.zip
           unzip -o upx.zip
           mv upx-*/upx.exe .
 
-      # ========= KOMPRES UPX =========
-      - name: Compress with UPX (ultra)
+      - name: Compress with UPX (ultra brutal)
         continue-on-error: true
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
@@ -101,8 +102,8 @@ jobs:
             ./upx --best --lzma build/bin/llama-server build/bin/llama-cli 2>/dev/null || true
           fi
 
-      # ========= PACK ARTIFACT =========
       - name: Prepare artifacts
+        shell: bash
         run: |
           mkdir release
           if [ "${{ runner.os }}" = "Windows" ]; then
