@@ -1,4 +1,4 @@
-name: llama.cpp - Full Optimized Binaries (Win + Linux + All Backends)
+name: llama.cpp - Full Optimized Binaries (Win + Linux + CURL ON + UPX Auto Forever)
 
 on:
   workflow_dispatch:
@@ -63,37 +63,53 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      # <<< KUNCI UTAMA AGAR WINDOWS TIDAK ERROR LAGI >>>
-      - name: CMake Configure (works perfectly on both Windows & Linux)
-        shell: bash   # paksa bash meskipun di Windows
+      # CURL ON di Windows
+      - name: Install libcurl via vcpkg (Windows only)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.bat
+          ./vcpkg/vcpkg install curl:x64-windows-static-md --triplet x64-windows-static-md
+          echo "VCPKG_ROOT=$(pwd)/vcpkg" >> $GITHUB_ENV
+
+      - name: CMake Configure
+        shell: bash
         run: |
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DLLAMA_BUILD_SERVER=ON \
             -DLLAMA_BUILD_EXAMPLES=ON \
             -DLLAMA_CURL=ON \
+            ${{ runner.os == 'Windows' && '-DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static-md' || '' }} \
             ${{ matrix.cmake_flags }}
 
-      - name: Build (max parallel)
+      - name: Build
         run: cmake --build build --config Release --parallel
 
-      # UPX terbaru otomatis selamanya
-      - name: Download latest UPX (Linux)
+      # ==================== UPX SELAMANYA OTOMATIS (5.0.2 & SETERUSNYA) ====================
+      - name: Get latest UPX version
+        id: upx
+        run: |
+          echo "version=$(curl -s https://api.github.com/repos/upx/upx/releases/latest | grep tag_name | cut -d '"' -f4 | sed 's/v//')" >> $GITHUB_OUTPUT
+
+      - name: Download & extract UPX (Linux)
         if: runner.os == 'Linux'
         run: |
-          curl -L -o upx.tar.xz https://github.com/upx/upx/releases/download/v5.0.2/upx-5.0.2-$(uname -m)_linux.tar.xz
+          VER=${{ steps.upx.outputs.version }}
+          curl -L -o upx.tar.xz https://github.com/upx/upx/releases/download/v$VER/upx-${VER}-amd64_linux.tar.xz
           tar -xJf upx.tar.xz --strip-components=1
           chmod +x upx
 
-      - name: Download latest UPX (Windows)
+      - name: Download & extract UPX (Windows)
         if: runner.os == 'Windows'
         run: |
-          curl -L -o upx.zip https://github.com/upx/upx/releases/download/v5.0.2/upx-5.0.2-win64.zip || \
-          curl -L -o upx.zip https://github.com/upx/upx/releases/latest/download/upx-5.0.2-win64.zip
+          VER=${{ steps.upx.outputs.version }}
+          curl -L -o upx.zip https://github.com/upx/upx/releases/download/v$VER/upx-${VER}-win64.zip
           unzip -o upx.zip
           mv upx-*/upx.exe .
 
-      - name: Compress with UPX (ultra brutal)
+      - name: Compress with UPX
         continue-on-error: true
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
