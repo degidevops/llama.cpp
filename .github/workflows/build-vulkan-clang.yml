@@ -1,4 +1,4 @@
-name: NUKLIR 100 t/s Ryzen 5600G (FINAL FIX - build\\bin\\)
+name: FULL OPTIMIZED BUILD
 
 on:
   workflow_dispatch:
@@ -6,69 +6,132 @@ on:
     branches: [ master, main ]
 
 jobs:
-  nuclear:
-    runs-on: windows-2025
-    timeout-minutes: 30
+  build-all:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows x64
+          - os: windows-latest
+            runner: windows-2025
+            name: Windows-x64-AVX512
+            cmake_extra: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_FMA=ON -DGGML_F16C=ON"
+            artifact_suffix: win-avx512
+
+          - os: windows-latest
+            runner: windows-2025
+            name: Windows-x64-CUDA12
+            cmake_extra: "-DGGML_CUDA=ON -DGGML_AVX2=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
+            artifact_suffix: win-cuda12
+            needs_cuda: true
+
+          # Linux x64
+          - os: ubuntu-latest
+            runner: ubuntu-24.04
+            name: Linux-x64-AVX512
+            cmake_extra: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_NATIVE=ON"
+            artifact_suffix: linux-avx512
+
+          - os: ubuntu-latest
+            runner: ubuntu-24.04
+            name: Linux-x64-CUDA12
+            cmake_extra: "-DGGML_CUDA=ON -DGGML_NATIVE=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
+            artifact_suffix: linux-cuda12
+            needs_cuda: true
+
+          - os: ubuntu-latest
+            runner: ubuntu-24.04
+            name: Linux-x64-Vulkan
+            cmake_extra: "-DGGML_VULKAN=ON -DGGML_NATIVE=ON"
+            artifact_suffix: linux-vulkan
+
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Setup MSVC Developer Command Prompt
+      - name: Setup Linux dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential cmake ninja-build libvulkan-dev vulkan-tools libclang-dev
+
+      - name: Setup CUDA (if needed)
+        if: matrix.needs_cuda
+        uses: Jimver/cuda-toolkit@v0.2.15
+        with:
+          cuda: '12.6.2'
+          method: network
+
+      - name: Setup MSVC (Windows only)
+        if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: amd64
+          arch: x64
 
-      - name: NUKLIR BUILD – MSVC + LLD (MAX SPEED)
-        shell: cmd
+      - name: Configure CMake – FULL FEATURES + MAX OPTIMIZATION
+        shell: bash
         run: |
-          cmake -B build ^
-            -G Ninja ^
-            -DGGML_NATIVE=ON ^
-            -DLLAMA_BUILD_SERVER=ON ^
-            -DLLAMA_CURL=OFF ^
-            -DBUILD_SHARED_LIBS=OFF ^
-            -DGGML_STATIC=ON ^    
-            -DCMAKE_BUILD_TYPE=Release ^
-            -DCMAKE_C_FLAGS_RELEASE="/O2 /arch:AVX2 /GL /DNDEBUG" ^
-            -DCMAKE_CXX_FLAGS_RELEASE="/O2 /arch:AVX2 /GL /DNDEBUG" ^
-            -DCMAKE_EXE_LINKER_FLAGS="/LTCG:incremental /OPT:REF /OPT:ICF"
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DLLAMA_BUILD_SERVER=ON \
+            -DLLAMA_SERVER_SSL=OFF \
+            -DLLAMA_BUILD_EXAMPLES=ON \
+            -DLLAMA_ALL_WARNINGS=OFF \
+            -DLLAMA_FATAL_WARNINGS=OFF \
+            -DGGML_STATIC=ON \
+            -DGGML_LTO=ON \
+            -DGGML_NATIVE=ON \
+            \
+            # Full capabilities
+            -DLLAMA_SUPPORT_VISION=ON \
+            -DLLAMA_SUPPORT_EMBEDDING=ON \
+            -DLLAMA_SUPPORT_TOOLS=ON \
+            -DLLAMA_SUPPORT_INSERT=ON \
+            \
+            # CPU / GPU backends
+            ${{ matrix.cmake_extra }} \
+            \
+            # Windows ekstra optim
+            ${{ runner.os == 'Windows' && '-DCMAKE_C_FLAGS_RELEASE=\"/O2 /GL /arch:AVX512 /DNDEBUG\" -DCMAKE_CXX_FLAGS_RELEASE=\"/O2 /GL /arch:AVX512 /DNDEBUG\" -DCMAKE_EXE_LINKER_FLAGS=\"/LTCG:incremental /OPT:REF /OPT:ICF\"' || '' }} \
+            \
+            # Linux ekstra optim
+            ${{ runner.os == 'Linux' && '-DCMAKE_C_FLAGS=-O3 -march=native -mtune=native -flto=auto -ffat-lto-objects' || '' }} \
+            ${{ runner.os == 'Linux' && '-DCMAKE_CXX_FLAGS=-O3 -march=native -mtune=native -flto=auto -ffat-lto-objects' || '' }}
 
-          cmake --build build --config Release -j 16
+      - name: Build (parallel max)
+        run: cmake --build build --config Release -j $(nproc || echo 16)
 
-          REM --- CEK OUTPUT FOLDER (NINJA PAKAI build\bin\) ---
-          dir build\bin\llama-server.exe || echo "TIDAK ADA DI build\bin\!"
+      - name: Download & Setup UPX
+        run: |
+          curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-${{ runner.os == 'Windows' && 'win64' || 'amd64_linux' }}.zip
+          unzip upx.zip
+          mv upx-*/upx.exe . 2>/dev/null || mv upx-*/upx .
+          chmod +x upx* || true
 
-          REM --- MASUK KE FOLDER build\bin\ ---
-          pushd build\bin
+      - name: Compress binaries with UPX (ultra)
+        run: |
+          ./upx* --best --lzma build/bin/llama-server* || true
+          ./upx* --best --lzma build/bin/llama-cli* || true
+          ./upx* --best --lzma build/bin/*embedding* || true
 
-          REM --- CEK FILE ---
-          dir llama-server.exe
-          if errorlevel 1 (
-            echo "ERROR: llama-server.exe TIDAK DITEMUKAN!"
-            popd
-            exit /b 1
-          )
+      - name: Rename & Prepare final binaries
+        shell: bash
+        run: |
+          mkdir -p release
+          cp build/bin/llama-server* release/llama-server-${{ matrix.artifact_suffix }}${{ runner.os == 'Windows' && '.exe' || '' }}
+          cp build/bin/llama-cli*    release/llama-cli-${{ matrix.artifact_suffix }}${{ runner.os == 'Windows' && '.exe' || '' }}
+          ls -lh release/
 
-          REM --- COPY ---
-          copy /Y llama-server.exe llama-NUKLIR-100tps.exe
-
-          REM --- CEK HASIL ---
-          dir llama-NUKLIR-100tps.exe
-
-          popd
-
-          REM --- DOWNLOAD UPX 64-BIT ---
-          curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.zip
-          tar -xf upx.zip
-          move upx-4.2.4-win64\upx.exe .
-
-          REM --- KOMPRES ---
-          .\upx.exe --best --lzma "build\bin\llama-NUKLIR-100tps.exe"
-
-      - name: Upload Artifact
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: llama-NUKLIR-100tps-5600G
-          path: build/bin/llama-NUKLIR-100tps.exe
+          name: llama.cpp-${{ matrix.name }}
+          path: release/*
+          if-no-files-found: error
