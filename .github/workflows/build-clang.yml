@@ -1,4 +1,4 @@
-name: llama.cpp - Full Optimized Binaries (Win + Linux + CURL ON + UPX Auto Forever)
+name: llama.cpp - ULTIMATE FULL FEATURES + MAX OPTIMIZED (Nov 2025)
 
 on:
   workflow_dispatch:
@@ -11,28 +11,28 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: win-avx512
+          - name: win-avx512-ultimate
             os: windows-latest
-            cmake_flags: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_F16C=ON -DGGML_FMA=ON"
-            artifact: llama-win-avx512.exe
-          - name: win-cuda
+            cmake_flags: "-DGGML_AVX512=ON -DGGML_AVX512_VBMI=ON -DGGML_AVX512_VNNI=ON -DGGML_AVX512_BF16=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_F16C=ON -DGGML_FMA=ON -DGGML_LTO=ON"
+            artifact: llama-win-avx512-ultimate.exe
+          - name: win-cuda-ultimate
             os: windows-latest
-            cmake_flags: "-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
-            artifact: llama-win-cuda.exe
+            cmake_flags: "-DGGML_CUDA=ON -DGGML_CUDA_F16=ON -DGGML_LTO=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
+            artifact: llama-win-cuda-ultimate.exe
             cuda: true
-          - name: linux-avx512
+          - name: linux-avx512-ultimate
             os: ubuntu-latest
-            cmake_flags: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_F16C=ON -DGGML_FMA=ON -DGGML_NATIVE=ON"
-            artifact: llama-linux-avx512
-          - name: linux-cuda
+            cmake_flags: "-DGGML_AVX512=ON -DGGML_AVX512_VBMI=ON -DGGML_AVX512_VNNI=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_F16C=ON -DGGML_FMA=ON -DGGML_NATIVE=ON -DGGML_LTO=ON"
+            artifact: llama-linux-avx512-ultimate
+          - name: linux-cuda-ultimate
             os: ubuntu-latest
-            cmake_flags: "-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
-            artifact: llama-linux-cuda
+            cmake_flags: "-DGGML_CUDA=ON -DGGML_CUDA_F16=ON -DGGML_LTO=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
+            artifact: llama-linux-cuda-ultimate
             cuda: true
-          - name: linux-vulkan
+          - name: linux-vulkan-ultimate
             os: ubuntu-latest
-            cmake_flags: "-DGGML_VULKAN=ON -DGGML_NATIVE=ON"
-            artifact: llama-linux-vulkan
+            cmake_flags: "-DGGML_VULKAN=ON -DGGML_NATIVE=ON -DGGML_LTO=ON"
+            artifact: llama-linux-vulkan-ultimate
 
     runs-on: ${{ matrix.os }}
 
@@ -68,7 +68,7 @@ jobs:
           ./vcpkg/vcpkg install curl:x64-windows-static-md --triplet x64-windows-static-md
           echo "VCPKG_ROOT=$(pwd)/vcpkg" >> $GITHUB_ENV
 
-      - name: CMake Configure
+      - name: CMake Configure - FULL FEATURES + MAX OPTIMIZED
         shell: bash
         run: |
           cmake -B build -G Ninja \
@@ -76,13 +76,17 @@ jobs:
             -DLLAMA_BUILD_SERVER=ON \
             -DLLAMA_BUILD_EXAMPLES=ON \
             -DLLAMA_CURL=ON \
+            -DLLAMA_TOOL_USE=ON \        # ← Tool / Function Calling FULL
+            -DLLAMA_MULTIMODAL=ON \      # ← Vision / Llava / Llama-3.2-Vision
+            -DLLAMA_EMBEDDING=ON \       # ← llama-embedding binary
+            -DLLAMA_LTO=ON \             # ← Link Time Optimization (speed++)
             ${{ runner.os == 'Windows' && '-DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static-md' || '' }} \
             ${{ matrix.cmake_flags }}
 
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      # ==================== UPX AUTO SELAMANYA ====================
+      # ==================== UPX ULTIMATE (ultra-brute = terkecil sedunia) ====================
       - name: Get latest UPX version
         id: upx
         shell: pwsh
@@ -108,30 +112,31 @@ jobs:
           Expand-Archive -Path upx.zip -DestinationPath . -Force
           Move-Item "upx-*-win64/upx.exe" upx.exe -Force
 
-      # PERBAIKAN KHUSUS WINDOWS — path sudah pindah ke build/bin/ sejak 2024 akhir
-      - name: Compress with UPX (best + lzma)
+      - name: Compress with UPX --ultra-brute (paling kecil!)
         continue-on-error: true
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
-            ./upx.exe --best --lzma "build/bin/llama-server.exe" "build/bin/llama-cli.exe" 2>nul || true
+            ./upx.exe --ultra-brute "build/bin/llama-server.exe" "build/bin/llama-cli.exe" "build/bin/llama-embedding.exe" 2>nul || true
           else
-            ./upx --best --lzma build/bin/llama-server build/bin/llama-cli 2>/dev/null || true
+            ./upx --ultra-brute build/bin/Release/llama-server build/bin/Release/llama-cli build/bin/Release/llama-embedding 2>/dev/null || true
           fi
 
-      # PERBAIKAN KHUSUS WINDOWS — copy dari folder yang benar
+      # ==================== PREPARE ARTIFACTS (PATH BENAR 2025) ====================
       - name: Prepare artifacts
         shell: bash
         run: |
-          mkdir release
+          mkdir -p release
           if [ "${{ runner.os }}" = "Windows" ]; then
-            # Windows → binary di build/bin/ (bukan build/bin/Release/)
+            # Windows → build/bin/
             cp build/bin/llama-server.exe release/${{ matrix.artifact }}
             [ -f build/bin/llama-cli.exe ] && cp build/bin/llama-cli.exe release/llama-cli-${{ matrix.artifact }} || true
+            [ -f build/bin/llama-embedding.exe ] && cp build/bin/llama-embedding.exe release/llama-embedding-${{ matrix.artifact }} || true
           else
-            # Linux → TETAP seperti semula (jangan diubah!)
-            cp build/bin/llama-server release/${{ matrix.artifact }}
-            [ -f build/bin/llama-cli ] && cp build/bin/llama-cli release/llama-cli-${{ matrix.artifact }} || true
+            # Linux → build/bin/Release/
+            cp build/bin/Release/llama-server release/${{ matrix.artifact }}
+            [ -f build/bin/Release/llama-cli ] && cp build/bin/Release/llama-cli release/llama-cli-${{ matrix.artifact }} || true
+            [ -f build/bin/Release/llama-embedding ] && cp build/bin/Release/llama-embedding release/llama-embedding-${{ matrix.artifact }} || true
           fi
 
       - name: Upload artifacts
