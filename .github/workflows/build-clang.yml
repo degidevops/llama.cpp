@@ -59,7 +59,6 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      # CURL ON di Windows via vcpkg
       - name: Install libcurl via vcpkg (Windows only)
         if: runner.os == 'Windows'
         shell: bash
@@ -83,7 +82,7 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      # ==================== UPX AUTO SELAMANYA (WINDOWS FIX 100%) ====================
+      # ==================== UPX AUTO SELAMANYA ====================
       - name: Get latest UPX version
         id: upx
         shell: pwsh
@@ -91,7 +90,6 @@ jobs:
           $json = Invoke-WebRequest -Uri https://api.github.com/repos/upx/upx/releases/latest -UseBasicParsing | ConvertFrom-Json
           $ver = $json.tag_name -replace '^v', ''
           "version=$ver" >> $env:GITHUB_OUTPUT
-          Write-Host "Latest UPX version: $ver"
 
       - name: Download & extract UPX (Linux)
         if: runner.os == 'Linux'
@@ -110,6 +108,7 @@ jobs:
           Expand-Archive -Path upx.zip -DestinationPath . -Force
           Move-Item "upx-*-win64/upx.exe" upx.exe -Force
 
+      # PERBAIKAN KHUSUS WINDOWS — path sudah pindah ke build/bin/ sejak 2024 akhir
       - name: Compress with UPX (best + lzma)
         continue-on-error: true
         shell: bash
@@ -117,23 +116,22 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ]; then
             ./upx.exe --best --lzma "build/bin/llama-server.exe" "build/bin/llama-cli.exe" 2>nul || true
           else
-            ./upx --best --lzma build/bin/Release/llama-server build/bin/Release/llama-cli 2>/dev/null || true
+            ./upx --best --lzma build/bin/llama-server build/bin/llama-cli 2>/dev/null || true
           fi
 
-      # ==================== PATH BENAR 2025 (Windows ≠ Linux) ====================
-      - name: Prepare artifacts (Path fix Nov 2025)
+      # PERBAIKAN KHUSUS WINDOWS — copy dari folder yang benar
+      - name: Prepare artifacts
         shell: bash
         run: |
-          mkdir -p release
-
+          mkdir release
           if [ "${{ runner.os }}" = "Windows" ]; then
-            # Windows: binary langsung di build/bin/
+            # Windows → binary di build/bin/ (bukan build/bin/Release/)
             cp build/bin/llama-server.exe release/${{ matrix.artifact }}
-            [ -f build/bin/llama-cli.exe ] && cp build/bin/llama-cli.exe release/llama-cli-${{ matrix.artifact }} || echo "llama-cli not built"
+            [ -f build/bin/llama-cli.exe ] && cp build/bin/llama-cli.exe release/llama-cli-${{ matrix.artifact }} || true
           else
-            # Linux: binary di build/bin/Release/
-            cp build/bin/Release/llama-server release/${{ matrix.artifact }}
-            [ -f build/bin/Release/llama-cli ] && cp build/bin/Release/llama-cli release/llama-cli-${{ matrix.artifact }} || echo "llama-cli not built"
+            # Linux → TETAP seperti semula (jangan diubah!)
+            cp build/bin/llama-server release/${{ matrix.artifact }}
+            [ -f build/bin/llama-cli ] && cp build/bin/llama-cli release/llama-cli-${{ matrix.artifact }} || true
           fi
 
       - name: Upload artifacts
