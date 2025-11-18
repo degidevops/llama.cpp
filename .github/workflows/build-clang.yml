@@ -59,7 +59,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      # CURL ON di Windows via vcpkg
+      # CURL untuk Windows via vcpkg
       - name: Install libcurl via vcpkg (Windows only)
         if: runner.os == 'Windows'
         shell: bash
@@ -83,15 +83,14 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      # ==================== UPX AUTO SELAMANYA (FIX WINDOWS 100%) ====================
-      - name: Get latest UPX version (cross-platform)
+      # ==================== UPX AUTO SELAMANYA (FIX WINDOWS PATH 2025) ====================
+      - name: Get latest UPX version
         id: upx
         shell: pwsh
         run: |
           $json = Invoke-WebRequest -Uri https://api.github.com/repos/upx/upx/releases/latest -UseBasicParsing | ConvertFrom-Json
           $ver = $json.tag_name -replace '^v', ''
           "version=$ver" >> $env:GITHUB_OUTPUT
-          Write-Host "Latest UPX version: $ver"
 
       - name: Download & extract UPX (Linux)
         if: runner.os == 'Linux'
@@ -106,32 +105,40 @@ jobs:
         shell: pwsh
         run: |
           $ver = "${{ steps.upx.outputs.version }}"
-          $url = "https://github.com/upx/upx/releases/download/v$ver/upx-$ver-win64.zip"
-          Invoke-WebRequest -Uri $url -OutFile upx.zip
+          Invoke-WebRequest -Uri "https://github.com/upx/upx/releases/download/v$ver/upx-$ver-win64.zip" -OutFile upx.zip
           Expand-Archive -Path upx.zip -DestinationPath . -Force
-          Move-Item -Path "upx-*-win64/upx.exe" -Destination upx.exe -Force
+          Move-Item "upx-*-win64/upx.exe" upx.exe -Force
 
-      - name: Compress with UPX (best + lzma)
+      - name: Compress with UPX
         continue-on-error: true
         shell: bash
         run: |
+          # Path otomatis sesuai OS (Ninja style 2024-2025)
           if [ "${{ runner.os }}" = "Windows" ]; then
-            ./upx.exe --best --lzma "build/bin/Release/llama-server.exe" "build/bin/Release/llama-cli.exe" 2>nul || true
+            ./upx.exe --best --lzma build/llama-server.exe build/llama-cli.exe 2>nul || true
           else
-            ./upx --best --lzma build/bin/llama-server build/bin/llama-cli 2>/dev/null || true
+            ./upx --best --lzma build/llama-server build/llama-cli 2>/dev/null || true
           fi
 
       - name: Prepare artifacts
         shell: bash
         run: |
           mkdir release
+
+          # Path yang benar untuk Ninja (Windows & Linux sama-sama di build/)
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cp build/bin/Release/llama-server.exe release/${{ matrix.artifact }}
-            [ -f build/bin/Release/llama-cli.exe ] && cp build/bin/Release/llama-cli.exe release/llama-cli-${{ matrix.artifact }} || true
+            cp build/llama-server.exe release/${{ matrix.artifact }}
+            [ -f build/llama-cli.exe ] && cp build/llama-cli.exe release/llama-cli-${{ matrix.artifact }} || true
           else
-            cp build/bin/llama-server release/${{ matrix.artifact }}
-            [ -f build/bin/llama-cli ] && cp build/bin/llama-cli release/llama-cli-${{ matrix.artifact }} || true
+            cp build/llama-server release/${{ matrix.artifact }}
+            [ -f build/llama-cli ] && cp build/llama-cli release/llama-cli-${{ matrix.artifact }} || true
           fi
+
+          # Debug: list isi folder biar yakin
+          echo "=== Isi folder build/ ==="
+          ls -la build/
+          echo "=== Isi folder release/ ==="
+          ls -la release/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
