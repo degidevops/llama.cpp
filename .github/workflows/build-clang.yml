@@ -1,4 +1,4 @@
-name: llama.cpp - Full Optimized Binaries (Win + Linux + CURL ON + UPX Auto Forever)
+name: llama.cpp - ALL FEATURES MENTOK 2025 (Tools + Vision + Embedding + Insert + CURL)
 
 on:
   workflow_dispatch:
@@ -11,32 +11,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: win-avx512
+          - name: windows-all-features
             os: windows-latest
-            cmake_flags: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_F16C=ON -DGGML_FMA=ON"
-            artifact: llama-win-avx512.exe
+            artifact: llama-win-ALL.exe
 
-          - name: win-cuda
-            os: windows-latest
-            cmake_flags: "-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
-            artifact: llama-win-cuda.exe
-            cuda: true
-
-          - name: linux-avx512
+          - name: linux-all-features
             os: ubuntu-latest
-            cmake_flags: "-DGGML_AVX512=ON -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_F16C=ON -DGGML_FMA=ON -DGGML_NATIVE=ON"
-            artifact: llama-linux-avx512
-
-          - name: linux-cuda
-            os: ubuntu-latest
-            cmake_flags: "-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=all-major"
-            artifact: llama-linux-cuda
-            cuda: true
-
-          - name: linux-vulkan
-            os: ubuntu-latest
-            cmake_flags: "-DGGML_VULKAN=ON -DGGML_NATIVE=ON"
-            artifact: llama-linux-vulkan
+            artifact: llama-linux-ALL
 
     runs-on: ${{ matrix.os }}
 
@@ -52,28 +33,22 @@ jobs:
           sudo apt update -qq
           sudo apt install -y build-essential cmake ninja-build libcurl4-openssl-dev libvulkan-dev glslc libshaderc-dev
 
-      - name: Install CUDA 12.6.2
-        if: matrix.cuda
-        uses: Jimver/cuda-toolkit@v0.2.29
-        with:
-          cuda: "12.6.2"
-          method: network
-
       - name: Setup MSVC (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      # CURL ON di Windows
-      - name: Install libcurl via vcpkg (Windows only)
+      # CURL untuk Windows
+      - name: Install vcpkg + curl (Windows only)
         if: runner.os == 'Windows'
         shell: bash
         run: |
           git clone --depth 1 https://github.com/microsoft/vcpkg.git
           ./vcpkg/bootstrap-vcpkg.bat
-          ./vcpkg/vcpkg install curl:x64-windows-static-md --triplet x64-windows-static-md
+          ./vcpkg/vcpkg_integral install curl:x64-windows-static-md --triplet x64-windows-static-md
           echo "VCPKG_ROOT=$(pwd)/vcpkg" >> $GITHUB_ENV
 
-      - name: CMake Configure
+      # SEMUA FITUR MENTOK + TOOLS + VISION + EMBEDDING + INSERT
+      - name: CMake Configure - ALL FEATURES ON
         shell: bash
         run: |
           cmake -B build -G Ninja \
@@ -81,21 +56,28 @@ jobs:
             -DLLAMA_BUILD_SERVER=ON \
             -DLLAMA_BUILD_EXAMPLES=ON \
             -DLLAMA_CURL=ON \
-            ${{ runner.os == 'Windows' && '-DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static-md' || '' }} \
-            ${{ matrix.cmake_flags }}
+            -DLLAMA_VISION=ON \
+            -DLLAMA_TOOL_USE=ON \
+            -DLLAMA_INSERT=ON \
+            -DLLAMA_EMBEDDING=ON \
+            -DLLAMA_RPC=ON \
+            -DGGML_AVX512=ON -DGGML_AVX512_VBMI=ON -DGGML_AVX512_VNNI=ON \
+            -DGGML_AVX2=ON -DGGML_AVX=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_NATIVE=ON \
+            ${{ runner.os == 'Windows' && '-DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static-md' || '' }}
 
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      # ==================== UPX AUTO SELAMANYA (Linux + Windows FIX) ====================
-      - name: Get latest UPX version (cross-platform)
+      # UPX AUTO LATEST - FIX WINDOWS 100% AMAN (pake Python, gak pake grep/cut/sed)
+      - name: Get latest UPX version (Windows + Linux safe)
         id: upx
         shell: bash
         run: |
-          VER=$(curl -s https://api.github.com/repos/upx/upx/releases/latest | grep '"tag_name"' | cut -d '"' -f4 | sed 's/v//')
+          VER=$(curl -s https://api.github.com/repos/upx/upx/releases/latest | python -c "import sys,json; print(json.load(sys.stdin)['tag_name'][1:])")
           echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "UPX version detected: $VER"
 
-      - name: Download & extract UPX (Linux)
+      - name: Download UPX (Linux)
         if: runner.os == 'Linux'
         shell: bash
         run: |
@@ -104,16 +86,16 @@ jobs:
           tar -xJf upx.tar.xz --strip-components=1
           chmod +x upx
 
-      - name: Download & extract UPX (Windows)
+      - name: Download UPX (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
           VER=${{ steps.upx.outputs.version }}
           curl -L -o upx.zip https://github.com/upx/upx/releases/download/v$VER/upx-${VER}-win64.zip
           unzip -o upx.zip
-          mv upx-*/upx.exe .
+          mv upx-*/upx.exe . 2>nul || mv upx.exe .
 
-      - name: Compress with UPX
+      - name: Compress with UPX (ultra)
         continue-on-error: true
         shell: bash
         run: |
