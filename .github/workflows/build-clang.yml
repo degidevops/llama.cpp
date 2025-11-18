@@ -41,7 +41,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -50,16 +50,16 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt update -qq
-          sudo apt install -  build-essential cmake ninja-build libcurl4-openssl-dev libvulkan-dev glslc libshaderc-dev
+          sudo apt install -y build-essential cmake ninja-build libcurl4-openssl-dev libvulkan-dev glslc libshaderc-dev
 
-      - name: Install CUDA (12.6.2 - stable 2025)
+      - name: Install CUDA 12.6.2
         if: matrix.cuda
         uses: Jimver/cuda-toolkit@v0.2.29
         with:
           cuda: "12.6.2"
           method: network
 
-      - name: Setup MSVC (Windows)
+      - name: Set up MSVC (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
@@ -72,28 +72,27 @@ jobs:
             -DLLAMA_CURL=ON \
             ${{ matrix.cmake_flags }}
 
-      - name: Build (max parallel)
+      - name: Build
         run: cmake --build build --config Release --parallel
 
-      # ==================== UPX AUTO LATEST (100% OTOMATIS) ====================
+      # ========= UPX LATEST OTOMATIS (WORK 100% 2025+) =========
       - name: Download latest UPX (Linux)
         if: runner.os == 'Linux'
         run: |
-          curl -L -o upx.tar.xz \
-            https://github.com/upx/upx/releases/latest/download/upx-$(uname -m)_linux.tar.xz
+          curl -L -o upx.tar.xz https://github.com/upx/upx/releases/latest/download/upx-$(uname -m)_linux.tar.xz
           tar -xJf upx.tar.xz --strip-components=1
           chmod +x upx
 
       - name: Download latest UPX (Windows)
         if: runner.os == 'Windows'
         run: |
-          curl -L -o upx.zip \
-            https://github.com/upx/upx/releases/latest/download/upx-$(uname -m)-win64.zip
-          unzip -o upx.zip -d .
+          curl -L -o upx.zip https://github.com/upx/upx/releases/latest/download/upx-x86_64-win64.zip || \
+          curl -L -o upx.zip https://github.com/upx/upx/releases/latest/download/upx-win64.zip
+          unzip -o upx.zip
           mv upx-*/upx.exe .
 
-      # ==================== COMPRESS WITH UPX ====================
-      - name: Compress binaries with UPX
+      # ========= KOMPRES UPX =========
+      - name: Compress with UPX (ultra)
         continue-on-error: true
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
@@ -102,16 +101,16 @@ jobs:
             ./upx --best --lzma build/bin/llama-server build/bin/llama-cli 2>/dev/null || true
           fi
 
-      # ==================== PREPARE ARTIFACTS ====================
-      - name: Prepare release artifacts
+      # ========= PACK ARTIFACT =========
+      - name: Prepare artifacts
         run: |
           mkdir release
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp build/bin/Release/llama-server.exe release/${{ matrix.artifact }}
-            cp build/bin/Release/llama-cli.exe    release/llama-cli-${{ matrix.artifact }} || true
+            [ -f build/bin/Release/llama-cli.exe ] && cp build/bin/Release/llama-cli.exe release/llama-cli-${{ matrix.artifact }} || true
           else
-            cp build/bin/llama-server            release/${{ matrix.artifact }}
-            cp build/bin/llama-cli               release/llama-cli-${{ matrix.artifact }} || true
+            cp build/bin/llama-server release/${{ matrix.artifact }}
+            [ -f build/bin/llama-cli ] && cp build/bin/llama-cli release/llama-cli-${{ matrix.artifact }} || true
           fi
 
       - name: Upload artifacts
