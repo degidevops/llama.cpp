@@ -52,15 +52,15 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Linux dependencies (fix shaderc + glslc)
+      # ===================== LINUX DEPS =====================
+      - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y build-essential cmake ninja-build \
-            libcurl4-openssl-dev libssl-dev \
-            libvulkan-dev vulkan-tools glslc libshaderc-dev
+          sudo apt-get install -y build-essential cmake ninja-build libcurl4-openssl-dev libssl-dev libvulkan-dev vulkan-tools glslc libshaderc-dev
 
-      - name: Setup vcpkg (Windows static curl)
+      # ===================== WINDOWS VCPKG (curl static) =====================
+      - name: Setup vcpkg (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: |
@@ -68,39 +68,43 @@ jobs:
           C:\vcpkg\bootstrap-vcpkg.bat
           C:\vcpkg\vcpkg install curl[core,ssl]:x64-windows-static-md --recurse
 
-      - name: Install CUDA Toolkit 12.6 (working action)
+      # ===================== CUDA (working & stable) =====================
+      - name: Install CUDA 12.6
         if: matrix.needs_cuda
         uses: Jimver/cuda-toolkit@v0.2.29
         with:
           cuda: '12.6.2'
           method: network
 
+      # ===================== MSVC =====================
       - name: Setup MSVC
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Configure CMake (FULL FEATURES + FIX CUDA WINDOWS)
+      # ===================== CMAKE (QUOTES FIX + NO -ffat-lto-objects) =====================
+      - name: Configure CMake
         shell: bash
-        env:
-          COMMON: >-
-            -DCMAKE_BUILD_TYPE=Release -G Ninja
-            -DBUILD_SHARED_LIBS=OFF
-            -DLLAMA_BUILD_SERVER=ON -DLLAMA_BUILD_EXAMPLES=ON
-            -DGGML_STATIC=ON -DGGML_LTO=ON
-            -DLLAMA_CURL=ON
-            -DLLAMA_SUPPORT_VISION=ON
-            -DLLAMA_SUPPORT_EMBEDDING=ON
-            -DLLAMA_SUPPORT_TOOLS=ON
-            -DLLAMA_SUPPORT_INSERT=ON
         run: |
           cmake -B build \
-            $COMMON \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DLLAMA_BUILD_SERVER=ON \
+            -DLLAMA_BUILD_EXAMPLES=ON \
+            -DGGML_STATIC=ON \
+            -DGGML_LTO=ON \
+            -DLLAMA_CURL=ON \
+            -DLLAMA_SUPPORT_VISION=ON \
+            -DLLAMA_SUPPORT_EMBEDDING=ON \
+            -DLLAMA_SUPPORT_TOOLS=ON \
+            -DLLAMA_SUPPORT_INSERT=ON \
             ${{ matrix.cmake_extra }} \
             ${{ runner.os == 'Windows' && '-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static-md' || '' }} \
-            ${{ runner.os == 'Windows' && '-DCMAKE_C_FLAGS_RELEASE=\"/O2 /GL /arch:AVX512 /DNDEBUG\" -DCMAKE_CXX_FLAGS_RELEASE=\"/O2 /GL /arch:AVX512 /DNDEBUG\" -DCMAKE_EXE_LINKER_FLAGS=\"/LTCG /OPT:REF /OPT:ICF\"' || '' }} \
-            ${{ runner.os == 'Linux' && '-DCMAKE_C_FLAGS=\"-O3 -march=native -mtune=native -flto=auto -ffat-lto-objects\" -DCMAKE_CXX_FLAGS=\"-O3 -march=native -mtune=native -flto=auto -ffat-lto-objects\"' || '' }}
+            ${{ runner.os == 'Windows' && '-DCMAKE_C_FLAGS_RELEASE=\"/O2 /GL /arch:AVX512 /DNDEBUG\" -DCMAKE_CXX_FLAGS_RELEASE=\"/O2 /GL /arch:AVX512 /DNDEBUG\" -DCMAKE_EXE_LINKER_FLAGS_RELEASE=\"/LTCG:incremental /OPT:REF /OPT:ICF\"' || '' }} \
+            ${{ runner.os == 'Linux' && '-DCMAKE_C_FLAGS=\"-O3 -march=native -mtune=native -flto\" -DCMAKE_CXX_FLAGS=\"-O3 -march=native -mtune=native -flto\"' || '' }}
 
-      - name: Build (fix Windows parallel)
+      # ===================== BUILD (Windows parallel fix) =====================
+      - name: Build
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -109,18 +113,20 @@ jobs:
             cmake --build build --config Release -j $(nproc)
           fi
 
+      # ===================== UPX =====================
       - name: Download UPX
         run: |
           curl -L -o upx.zip https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-${{ runner.os == 'Windows' && 'win64' || 'amd64_linux' }}.zip
           unzip -o upx.zip
           chmod +x upx*/upx* 2>/dev/null || true
 
-      - name: Compress binaries
+      - name: Compress with UPX
         continue-on-error: true
         run: |
           ./upx*/upx* --best --lzma build/bin/llama-server* build/bin/llama-cli* || true
 
-      - name: Prepare artifacts
+      # ===================== ARTIFAK =====================
+      - name: Prepare release
         run: |
           mkdir release
           suffix="${{ matrix.artifact_suffix }}${{ runner.os == 'Windows' && '.exe' || '' }}"
